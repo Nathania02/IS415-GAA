@@ -1,6 +1,12 @@
 ---
 title: "Hands-on Ex1"
 author: "Nathania Yeo"
+date: "August 16, 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true
+  freeze: true
 ---
 
 # 1.0 Overview of Geospatial
