@@ -181,8 +181,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#data-acquisition" id="toc-data-acquisition" class="nav-link" data-scroll-target="#data-acquisition">2.1 Data Acquisition</a></li>
   <li><a href="#r-setup" id="toc-r-setup" class="nav-link" data-scroll-target="#r-setup">2.2 R Setup</a></li>
-  <li><a href="#importing-data-into-r" id="toc-importing-data-into-r" class="nav-link" data-scroll-target="#importing-data-into-r">3.0 Importing Data into R</a></li>
   </ul></li>
+  <li><a href="#importing-data-into-r" id="toc-importing-data-into-r" class="nav-link" data-scroll-target="#importing-data-into-r">3.0 Importing Data into R</a></li>
   <li><a href="#data-preparation" id="toc-data-preparation" class="nav-link" data-scroll-target="#data-preparation">4.0 Data Preparation</a>
   <ul class="collapse">
   <li><a href="#data-wrangling" id="toc-data-wrangling" class="nav-link" data-scroll-target="#data-wrangling">4.1 Data Wrangling</a></li>
@@ -293,8 +293,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <p>I only installed tidyverse instead of readr, tidyr and dplyr individually.</p>
 </section>
-<section id="importing-data-into-r" class="level2">
-<h2 class="anchored" data-anchor-id="importing-data-into-r">3.0 Importing Data into R</h2>
+</section>
+<section id="importing-data-into-r" class="level1">
+<h1>3.0 Importing Data into R</h1>
 <p>The code chunk below makes use of the sf package from st_read() to import MP14_SUBZONE_WEB_PL shapefile into R as a simple feature data frame called mpsz.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>mpsz <span class="ot">&lt;-</span> <span class="fu">st_read</span>(<span class="at">dsn =</span> <span class="st">"data/geospatial"</span>, <span class="at">layer=</span><span class="st">"MP14_SUBZONE_WEB_PL"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -368,7 +369,6 @@ dbl (2): Pop, Time
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
 </div>
 </div>
-</section>
 </section>
 <section id="data-preparation" class="level1">
 <h1>4.0 Data Preparation</h1>

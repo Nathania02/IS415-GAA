@@ -45,7 +45,7 @@ pacman::p_load(sf, tmap, tidyverse)
 
 I only installed tidyverse instead of readr, tidyr and dplyr individually.
 
-## 3.0 Importing Data into R
+# 3.0 Importing Data into R
 
 The code chunk below makes use of the sf package from st_read() to import MP14_SUBZONE_WEB_PL shapefile into R as a simple feature data frame called mpsz.
 
