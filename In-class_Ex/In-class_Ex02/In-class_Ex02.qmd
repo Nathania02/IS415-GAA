@@ -1,0 +1,60 @@
+---
+title: "In-class Ex2"
+author: "Nathania Yeo"
+date: "August 26, 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true
+  freeze: true
+---
+
+# 1.0 Importing Data
+
+```{r}
+pacman::p_load(sf, tmap, tidyverse)
+```
+
+```{r}
+mpsz <- st_read(dsn = "data", layer="MP14_SUBZONE_WEB_PL")
+```
+```{r}
+class(mpsz)
+```
+
+```{r}
+st_write(mpsz, "data/MP14_SUBZONE_WEB_PL.kml", delete_dsn = TRUE)
+```
+```{r}
+mpsz19_kml <- st_read("data/MasterPlan2019SubzoneBoundaryNoSeaKML.kml")
+```
+```{r}
+mpsz19 <- st_read(dsn = "data", layer = "MPSZ-2019") %>%
+  st_transform(crs = 3414)
+```
+
+```{r}
+popdata <- read_csv("data/respopagesextod2023.csv")
+```
+# 2.0 Data Wrangling
+```{r}
+popdata2023 <- popdata %>% 
+  group_by(PA, SZ, AG) %>%
+  summarise(`POP` = sum(`Pop`)) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = AG, values_from = POP)
+```
+```{r}
+colnames(popdata2023)
+```
+
+```{r}
+popdata2023 <- popdata2023 %>% mutate_at(.vars = vars(PA, SZ), 
+                                         .funs = list(toupper))
+```
+
+```{r}
+popdata2023 <- left_join(popdata2023, mpsz19, by=c("SZ" = "SUBZONE_N"))
+```
+
+
