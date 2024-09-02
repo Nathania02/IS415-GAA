@@ -1,0 +1,15 @@
+{
+  "hash": "1cc210c14ebcb807c07ba5cb648fbd5f",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Hands-on Ex 4: Network Constrained Spatial Point Patterns Analysis\"\nauthor: \"Nathania Yeo\"\ndate: \"September 02, 2024\"\ndate-modified: \"last-modified\"\nexecute:\n  eval: true\n  echo: true\n  freeze: true\n---\n\n\n# 1.0 Overview\n\n**Network constrained Spatial Point Patterns Analysis (NetSPAA)** is a collection of spatial point patterns analysis methods special developed for analysing spatial point event occurs on or alongside network. The spatial point event can be locations of traffic accident or childcare centre for example. The network, on the other hand can be a road network or river network.\n\nIn this hands-on exercise, I will be using appropriate functions of **spNetwork** package:\n\n-   to derive **network kernel density estimation (NKDE)**, and\n\n-   to perform network G-function and k-function analysis\n\n# 2.0 Setup for Exercise\n\n## 2.1 Data Acquisition\n\nIn this study, I will analyse the spatial distribution of childcare centre in [Punggol planning area](https://en.wikipedia.org/wiki/Punggol). Two geospatial data sets will be used:\n\n-   *Punggol_St*, a line features geospatial data which store the road network within Punggol Planning Area.\n\n-   *Punggol_CC*, a point feature geospatial data which store the location of childcare centres within Punggol Planning Area.\n\nBoth data sets are in ESRI shapefile format.\n\n## 2.2 R Setup\n\n4 packages will be used in this exercise:\n\n-   [spNetwork](https://cran.r-project.org/web/packages/spNetwork/index.html), which provides functions to perform Spatial Point Patterns Analysis such as kernel density estimation (KDE) and K-function on network. It also can be used to build spatial matrices (‘listw’ objects like in ‘spdep’ package) to conduct any kind of traditional spatial analysis with spatial weights based on reticular distances.\n\n-   [sf](https://r-spatial.github.io/sf/index.html) package provides functions to manage, processing, and manipulate **Simple Features**, a formal geospatial data standard that specifies a storage and access model of spatial geometries such as points, lines, and polygons.\n\n-   [**tmap**](https://cran.r-project.org/web/packages/tmap/index.html) which provides functions for plotting cartographic quality static point patterns maps or interactive maps by using [leaflet](https://leafletjs.com/) API.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npacman::p_load(sf, spNetwork, tmap, tidyverse)\n```\n:::\n\n\n# 3.0 Importing Data into R\nI will use the function st_read() of sf package to import Punggol_St and Punggol_CC geospatial data sets into RStudio as sf data frames.\n\n::: {.cell}\n\n```{.r .cell-code}\n# network <- st_read(dsn = \"data\", layer = \"Punggol_St\")\n```\n:::\n\n::: {.cell}\n\n```{.r .cell-code}\n# childcare <- st_read(dsn = \"data\", layer = \"Punggol_CC\")\n```\n:::\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
