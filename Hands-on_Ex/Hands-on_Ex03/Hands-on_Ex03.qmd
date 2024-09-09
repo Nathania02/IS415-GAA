@@ -105,13 +105,16 @@ Notice that all the geospatial layers are within the same map extend. This shows
 
 Alternatively, we can also prepare a pin map by using the code chunk below.
 
+(tmap_mode code edited on 9 September)
+
 ```{r}
-tmap_mode('view')
+# tmap_mode('view')
+tmap_mode('plot')
 tm_shape(childcare_sf)+ tm_dots()
 ```
 
 ```{r}
-tmap_mode("plot")
+# tmap_mode("plot")
 ```
 
 Notice that at the interactive mode, tmap is using leaflet for R API. The advantage of this interactive pin map is it allows us to navigate and zoom around the map freely. We can also query the information of each simple feature (i.e. the point) by clicking of them. Last but not least, you can also change the background of the internet map layer. Currently, three internet map layers are provided. They are: ESRI.WorldGrayCanvas, OpenStreetMap, and ESRI.WorldTopoMap. The default is ESRI.WorldGrayCanvas.
@@ -208,15 +211,17 @@ The output shows that there are 128 duplicated point events.
 
 To view the locations of these duplicate point events, we will plot childcare data by using the code chunk below.
 
+(tmap_mode code edited on 9 September)
 ```{r}
-tmap_mode('view')
+# tmap_mode('view')
+tmap_mode('plot')
 tm_shape(childcare) +
   tm_dots(alpha=0.4, 
           size=0.05)
 ```
 
 ```{r}
-tmap_mode("plot")
+# tmap_mode("plot")
 ```
 
 ::: {.callout-tip title="Spotting duplicates from the map"}
