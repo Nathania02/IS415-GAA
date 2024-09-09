@@ -10,3 +10,36 @@ execute:
 ---
 
 # Introduction
+
+
+```{r}
+pacman::p_load(sf, raster, spatstat, tmap, tidyverse, devtools, sp)
+```
+
+
+# Importing Data
+```{r}
+boundary_data_sf <- st_read(dsn = "data", layer = "mmr_polbnda2_adm1_250k_mimu_1")
+```
+
+```{r}
+acled_data_sf <- read_csv("data/2021-01-01-2024-06-30-Southeast_Asia-Myanmar.csv") %>%
+  st_as_sf(coords = c(
+    "longitude", "latitude"), crs=4326) %>% 
+  st_transform(crs = 32647) %>% 
+  mutate(event_date = dmy(event_date))
+```
+
+```{r}
+# acled_data
+```
+
+```{r}
+# tmap_mode("plot")
+# tm_shape(boundary_data_sf) + tm_polygons() +  tm_shape(acled_data_sf) + tm_dots()
+```
+
+```{r}
+tmap_mode("plot")
+```
+
