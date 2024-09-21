@@ -113,4 +113,45 @@ for(i in tims){
 }
 ```
 
+# Computing STKDE by Day of Year
+## Creating ppp object 
+```{r}
+fire_yday_ppp <- fire_sf %>% 
+  select(DayofYear) %>%
+  as.ppp()
+```
 
+## Including owin object
+```{r}
+fire_yday_owin <- fire_yday_ppp[kbb_owin]
+summary(fire_yday_owin)
+```
+```{r}
+kde_yday <- spattemp.density(
+  fire_yday_owin)
+summary(kde_yday)
+```
+```{r}
+plot(kde_yday)
+```
+# Computing spatio-temporal KDE: Improved method
+One of the nice function provides in sparr package is BOOT.spattemp(). It support bandwidth selection for standalone spatiotemporal density/intensity based on bootstrap estimation of the MISE, providing an isotropic scalar spatial bandwidth and a scalar temporal bandwidth.
+
+Code chunk below uses BOOT.spattemp() to determine both the spatial bandwidth and the scalar temporal bandwidth.
+```{r}
+set.seed(1234)
+BOOT.spattemp(fire_yday_owin) 
+```
+
+# Computing spatio-temporal KDE
+```{r}
+kde_yday <- spattemp.density(
+  fire_yday_owin,
+  h = 9000,
+  lambda = 19)
+summary(kde_yday)
+```
+
+```{r}
+plot(kde_yday)
+```

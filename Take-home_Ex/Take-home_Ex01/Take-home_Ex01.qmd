@@ -11,9 +11,9 @@ execute:
 
 # 1.0 Introduction
 
-
+I will be using the following packages in my project:
 ```{r}
-pacman::p_load(sf, raster, spatstat, tmap, tidyverse, devtools, sp, smoothr, viridis)
+pacman::p_load(sf, raster, spatstat, tmap, tidyverse, devtools, sp, smoothr, viridis, sparr)
 ```
 
 
@@ -24,6 +24,7 @@ I edited the coordinates to fit Myanmar.
 boundary_data_sf <- st_read(dsn = "data", layer = "mmr_polbnda2_adm1_250k_mimu_1") %>% 
   st_transform(crs=32647)
 ```
+
 ## 2.2 Importing conflict data
 Converted the latitude and longitude to standardized the projection system
 ```{r}
@@ -34,6 +35,7 @@ acled_data_sf <- read_csv("data/2021-01-01-2024-06-30-Southeast_Asia-Myanmar.csv
   st_transform(crs = 32647) %>% 
   mutate(event_date = dmy(event_date))
 ```
+
 # 3.0 Data Wrangling
 Creating another column "quarter" so that I can split them up into quarters for KDE plot. I also filtered the event types - Battles, Strategic developments, Violence against civilians and Explosion/Remote violence. I then 
 ```{r}
@@ -50,6 +52,7 @@ write_rds(conflict_events_sf, "data/rds/conflict_events_sf.rds")
 ```
 
 ```{r}
+#| echo: false
 conflict_events_sf <- read_rds("data/rds/conflict_events_sf.rds")
 ```
 
@@ -222,93 +225,275 @@ owin_2024_2q_ppp = conflict_2024_2q_ppp_jit[boundary_owin]
 owin_list = list(owin_2021_1q_ppp, owin_2021_2q_ppp, owin_2021_3q_ppp, owin_2021_4q_ppp, owin_2022_1q_ppp, owin_2022_2q_ppp, owin_2022_3q_ppp, owin_2022_4q_ppp, owin_2023_1q_ppp, owin_2023_2q_ppp, owin_2023_3q_ppp, owin_2023_4q_ppp, owin_2024_1q_ppp, owin_2024_2q_ppp)
 ```
 
-# 4.0 KDE
-I decided to 
+# 4.0 Quarterly KDE layers
 ```{r}
 par(mfrow=c(1,4))
-# owin.km <- rescale.ppp(owin_2021_1q_ppp, 1000, "km")
-# owin_bw <- density(owin.km, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
-# plot(owin_bw)
-
-# kde_firstq_bw <- density(conflict_boundary_firstppp, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
 for (i in 1:length(owin_list)) {
   owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
   owin_bw <- density(owin.km, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
-  plot(owin_bw)
+  plot(owin_bw, main = paste("KDE Plot for ", i))
 }
 ```
 
 ```{r}
-# bw <- bw.diggle(kde_firstq_bw.km)
-# bw
+par(mfrow=c(1,4))
+for (i in 1:length(owin_list)) {
+  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
+  owin_bw <- density(owin.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
+  plot(owin_bw, main = paste("KDE Plot for ", i))
+}
 ```
 
 ```{r}
-# bw <- bw.ppl(kde_firstq_bw.km)
-# bw
+bw_diggle = list()
+for (i in 1:length(owin_list)) {
+  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
+  bw <- bw.diggle(owin.km)
+  bw
+}
 ```
 
 ```{r}
-# kde_firstq_bw.km <- rescale.ppp(conflict_boundary_firstppp, 1000, "km")
-# kde_firstq.bw <- density(kde_firstq_bw.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
-# plot(kde_firstq.bw)
+for (i in 1:length(owin_list)) {
+  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
+  bw <- bw.ppl(owin.km)
+  bw
+}
+```
+
+```{r}
+par(mfrow=c(1,4))
+for (i in 1:length(owin_list)) {
+  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
+  owin_bw <- density(owin.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
+  plot(owin_bw, main = paste("KDE Plot for ", i))
+}
 ```
 
 I tried to set a higher bandwidth in order to illuminate the map more.
 ```{r}
+par(mfrow=c(1,4))
 sigm <- 15.0
+owin_bw_list <- list()
 for (i in 1:length(owin_list)) {
   owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
   owin_bw <- density(owin.km, sigma=sigm, edge=TRUE, kernel="gaussian")
-  plot(owin_bw)
+  plot(owin_bw, main = paste("KDE Plot for ", i))
+  
+  owin_bw_list[[paste0("owin_bw_", i)]] <- owin_bw
+}
+```
+From the KDE plots, the number of conflicts increased in the first, second and fourth quarter in 2022 and the first, second and third quarter in 2023.  
+
+# 5.0 2nd-order Spatial
+Looking at the KDE plots, most of the conflicts seem to be happening in the regions. Therefore, I want to find out more about the conflicts in the regions. I filter the data to focus on Region.
+```{r}
+#| eval: false
+region_sf <- boundary_data_sf[boundary_data_sf$ST_RG == 'Region',]
+write_rds(region_sf, "data/rds/region_sf.rds")
+```
+
+```{r}
+#| echo: false
+region_sf <- read_rds("data/rds/region_sf.rds")
+```
+
+```{r}
+region_owin = as.owin(region_sf)
+```
+
+```{r}
+region_2021_1q_owin <- conflict_2021_1q_ppp_jit[region_owin]
+region_2021_2q_owin <- conflict_2021_2q_ppp_jit[region_owin]
+region_2021_3q_owin <- conflict_2021_3q_ppp_jit[region_owin]
+region_2021_4q_owin <- conflict_2021_4q_ppp_jit[region_owin]
+region_2022_1q_owin <- conflict_2022_1q_ppp_jit[region_owin]
+region_2022_2q_owin <- conflict_2022_2q_ppp_jit[region_owin]
+region_2022_3q_owin <- conflict_2022_3q_ppp_jit[region_owin]
+region_2022_4q_owin <- conflict_2022_4q_ppp_jit[region_owin]
+region_2023_1q_owin <- conflict_2023_1q_ppp_jit[region_owin]
+region_2023_2q_owin <- conflict_2023_2q_ppp_jit[region_owin]
+region_2023_3q_owin <- conflict_2023_3q_ppp_jit[region_owin]
+region_2023_4q_owin <- conflict_2023_4q_ppp_jit[region_owin]
+region_2024_1q_owin <- conflict_2024_1q_ppp_jit[region_owin]
+region_2024_2q_owin <- conflict_2024_2q_ppp_jit[region_owin]
+```
+
+```{r}
+region_owin_list = list(region_2021_1q_owin, region_2021_2q_owin, region_2021_3q_owin, region_2021_4q_owin, region_2022_1q_owin, region_2022_2q_owin, region_2022_3q_owin, region_2022_4q_owin, region_2023_1q_owin, region_2023_2q_owin, region_2023_3q_owin, region_2023_4q_owin, region_2024_1q_owin, region_2024_2q_owin)
+```
+
+```{r}
+for (i in 1:length(region_owin_list)) {
+  region_ppp.km = rescale.ppp(region_owin_list[[i]], 1000, "km")
+  plot(region_ppp.km, main= paste("Region plot ", i))
 }
 ```
 
-# 5.0 2nd-order Spatial
-## G-function
-From the plots above, it seems that most of the conflicts are happening in regions such as Sagaing, Mandalay and Magwe. I want to find out more about the conflicts in these 3 regions.
-
-Can i focus on a certain region for a certain quarter in a year e.g. like mandalay in q3 in 2022 then i do 2nd order spatial analysis on it?
+## 5.1 Region F Function
+Unfortunately, L and K function are too computationally intensive to run on all points and it has a runtime of O(n^2) which my computer would not be able to support. Therefore, I will be using the F function to see if the conflict points are randomly distributed, clustered or regularly distributed.
 ```{r}
-sagaing <- boundary_data_sf %>% 
-  filter(ST == "Sagaing")
-magway <- boundary_data_sf %>% 
-  filter(ST == "Magway")
-mandalay <- boundary_data_sf %>% 
-  filter(ST == "Mandalay")
+for (i in 1:length(region_owin_list)) {
+  region_ppp.km = rescale.ppp(region_owin_list[[i]], 1000, "km")
+  F_region = Fest(region_ppp.km)
+  F_region.csr <- envelope(region_ppp.km, Fest, nsim=99)
+  plot(F_region.csr, main=paste("F_region ", i))
+}
+```
+From the plots here, since the emperical curve falls below the envelope curve, we can conclude that the points are more regularly distributed than randomly distributed in each region.
+
+# 6.0 Spatio-temporal KDE layers
+```{r}
+#| eval: false
+conflict_quarter <- conflict_events_sf %>% select(quarter) %>%
+  mutate(quarter_num = dense_rank(quarter))
+
+conflict_quarter <- conflict_quarter %>% select(quarter_num)
+
+write_rds(conflict_quarter, "data/rds/conflict_quarter.rds")
 ```
 
 ```{r}
-sagaing_owin = as.owin(sagaing)
-mayway_owin = as.owin(magway)
-mandalay_owin = as.owin(mandalay)
+#| echo: false
+conflict_quarter <- read_rds("data/rds/conflict_quarter.rds")
 ```
 
 ```{r}
-# conflict_sagaing_ppp <- conflict_firstq_ppp_jit[sagaing_owin]
-# conflict_magway_ppp <- conflict_firstq_ppp_jit[mayway_owin]
-# conflict_mandalay_ppp <- conflict_firstq_ppp_jit[mandalay_owin]
+conflict_quarter_ppp <- as.ppp(conflict_quarter)
+conflict_quarter_ppp
 ```
 
 ```{r}
-# conflict_sagaing_ppp.km = rescale.ppp(conflict_sagaing_ppp, 1000, "km")
-# conflict_magway_ppp.km = rescale.ppp(conflict_magway_ppp, 1000, "km")
-# conflict_mandalay_ppp.km = rescale.ppp(conflict_mandalay_ppp, 1000, "km")
+summary(conflict_quarter_ppp)
+```
+
+Seen from the summary above, there are duplicated points. Therefore, I will be removing them since duplicated points will skew density estimates. I will save them in a rds file so that I do not have to remove the duplicated values again.
+```{r}
+#| eval: false
+sum(multiplicity(conflict_quarter_ppp) > 1)
+conflict_quarter_ppp_jit <- rjitter(conflict_quarter_ppp, retry=TRUE, nsim=1, drop=TRUE)
+write_rds(conflict_quarter_ppp_jit, "data/rds/conflict_quarter_ppp_jit.rds")
 ```
 
 ```{r}
-# par(mfrow=c(1,3))
-# plot(conflict_sagaing_ppp.km, main="Sagaing")
-# plot(conflict_magway_ppp.km, main="Magway")
-# plot(conflict_mandalay_ppp.km, main="Mandalay")
+conflict_quarter_ppp_jit <- read_rds("data/rds/conflict_quarter_ppp_jit.rds")
 ```
 
-## 5.1 Sagaing Region
-Due to the computation power available,  
 ```{r}
-
-# F_Sagaing = Fest(conflict_sagaing_ppp.km)
-# F_Sagaing.csr <- envelope(conflict_sagaing_ppp.km, Fest, nsim=99)
-# plot(F_Sagaing.csr)
+summary(conflict_quarter_ppp_jit)
 ```
-From the plots here, it can be seen that the spatial points are clustered. 
+
+```{r}
+conflict_quarter_owin <- conflict_quarter_ppp_jit[boundary_owin]
+summary(conflict_quarter_owin)
+```
+
+```{r}
+plot(conflict_quarter_owin)
+```
+
+## 6.1 Computing Spatio-temporal KDE
+```{r}
+st_conflict <- spattemp.density(conflict_quarter_owin)
+summary(st_conflict)
+```
+
+## 6.2 Plot the Spatio-temporal KDE layers
+Instead of representing the quarters with 2021.1, 2021.2 etc, I edited it and used integer to represent each quarter. 
+2021.1 is represented by 1, 2021.2 is represented by 2, 2021.3 is represented by 3, 2021.4 is represented by 4, 2022.1 is represented by 5 and so on.
+```{r}
+quarter <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+st_kde_plots <- list()
+
+par(mfcol=c(1,4))
+for(i in quarter){
+  plot(st_conflict, i, 
+       override.par=FALSE,
+       fix.range=TRUE, 
+       main=paste("KDE by quarter", i))
+  st_kde_plots[[i]] <- recordPlot()
+}
+```
+
+# 7.0 2nd-order spatio-temporal point patterns analysis
+```{r}
+F_conflict = Fest(conflict_quarter_owin)
+F_conflict.csr <- envelope(conflict_quarter_owin, Fest, nsim=99)
+plot(F_conflict.csr, main=paste("F_conflict ", i))
+```
+
+From the graph above, the events are clustered.
+
+# 8.0 Plot on Openstreetmap of myanmar
+Convert the KDE output to grid object and raster object. I saved the raster objects into a folder so that I can load it from there immediately the next time I run this.
+```{r}
+#| eval: false
+for(i in 1:length(owin_bw_list)){
+  kde_conflict_mmr_bw_raster <- raster(owin_bw_list[[i]])
+  projection(kde_conflict_mmr_bw_raster) <- CRS("+init=EPSG:32647")
+  file_name <- paste0("kde_myanmar_", i, ".tif")
+  writeRaster(kde_conflict_mmr_bw_raster, paste0("data/raster/kde_myanmar_", i, ".tif"), format = "GTiff", overwrite = TRUE)
+}
+```
+
+## 8.1 KDE Plots
+Since previously I have saved the raster plot, I load them and put them into a list so that I can loop through the list and plot the quarterly KDE on the OpenStreetMap.
+```{r}
+kde_raster_1 <- raster("data/raster/kde_myanmar_1.tif")
+kde_raster_2 <- raster("data/raster/kde_myanmar_2.tif")
+kde_raster_3 <- raster("data/raster/kde_myanmar_3.tif")
+kde_raster_4 <- raster("data/raster/kde_myanmar_4.tif")
+kde_raster_5 <- raster("data/raster/kde_myanmar_5.tif")
+kde_raster_6 <- raster("data/raster/kde_myanmar_6.tif")
+kde_raster_7 <- raster("data/raster/kde_myanmar_7.tif")
+kde_raster_8 <- raster("data/raster/kde_myanmar_8.tif")
+kde_raster_9 <- raster("data/raster/kde_myanmar_9.tif")
+kde_raster_10 <- raster("data/raster/kde_myanmar_10.tif")
+kde_raster_11 <- raster("data/raster/kde_myanmar_11.tif")
+kde_raster_12 <- raster("data/raster/kde_myanmar_12.tif")
+kde_raster_13 <- raster("data/raster/kde_myanmar_13.tif")
+kde_raster_14 <- raster("data/raster/kde_myanmar_14.tif")
+
+kde_raster_list <- list(kde_raster_1, kde_raster_2, kde_raster_3, kde_raster_4, kde_raster_5, kde_raster_6, kde_raster_7, kde_raster_8, kde_raster_9, kde_raster_10, kde_raster_11, kde_raster_12, kde_raster_13, kde_raster_14)
+
+```
+
+```{r}
+par(mfrow=c(1,4))
+tmap_mode("view")
+for (i in 1:length(kde_raster_list)){
+  map <- tm_shape(kde_raster_list[[i]]) +
+    tm_raster(palette="viridis",n=5, style="pretty", alpha=0.6, title = paste("KDE at quarter", i)) + 
+    tm_layout(title = paste("KDE Quarterly", i)) + 
+    tm_basemap("OpenStreetMap")+
+    tm_shape(boundary_data_sf) + tm_borders() +
+    tm_layout(legend.outside = TRUE)
+  print(map)
+}
+```
+
+## 8.2 Spatio-temporal KDE Plots
+
+```{r}
+st_conflict_z <- st_conflict$z
+```
+
+```{r}
+tmap_mode("view")
+for (time_point in names(st_conflict_z)){
+  density_conflict <- st_conflict_z[[time_point]]
+  raster_conflict <- raster(density_conflict)
+  raster_conflict <- raster_conflict*1000
+  projection(raster_conflict) <- CRS("+init=EPSG:32647")
+  
+  st_map <- tm_shape(raster_conflict) + 
+    tm_raster(palette="viridis", title=paste("Density at Quarter", time_point)) + 
+    tm_layout(title = paste("Spatiotemporal KDE Quarterly", time_point)) +
+    tm_basemap("OpenStreetMap") + 
+    tm_shape(boundary_data_sf) + tm_borders() + 
+    tm_layout(legend.outside = TRUE)
+  print(st_map)
+}
+```
+    
+    
