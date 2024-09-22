@@ -11,57 +11,134 @@ execute:
 
 # 1.0 Introduction
 
+Millions of people have their lives shattered by armed conflict – wars – every year.
+
+Armed conflict has been on the rise since about 2012, after a decline in the 1990s and early 2000s. First came conflicts in Libya, Syria and Yemen, triggered by the 2011 Arab uprisings. Libya’s instability spilled south, helping set off a protracted crisis in the Sahel region. A fresh wave of major combat followed: the 2020 Azerbaijani-Armenian war over the Nagorno-Karabakh enclave, horrific fighting in Ethiopia’s northern Tigray region that began weeks later, the conflict prompted by the Myanmar army’s 2021 power grab and Russia’s 2022 assault on Ukraine. Add to those 2023’s devastation in Sudan and Gaza. Around the globe, more people are dying in fighting, being forced from their homes or in need of life-saving aid than in decades.
+
+In this exercise, there are a few task that will be done to find out more about the conflicts in Myanmar. They are as follows:
+
+1.  Using appropriate function of sf and tidyverse packages, import and transform the downloaded armed conflict data and administrative boundary data into sf tibble data.frames.
+
+2.  Using the geospatial data sets prepared, derive quarterly KDE layers. Using the geospatial data sets prepared, perform 2nd-Order Spatial Point Patterns Analysis.
+
+3.  Using the geospatial data sets prepared, derive quarterly spatio-temporal KDE layers.
+
+4.  Using the geospatial data sets prepared, perform 2nd-Order Spatio-temporal Point Patterns Analysis.
+
+5.  Using appropriate tmap functions, display the KDE and Spatio-temporal KDE layers on openstreetmap of Myanmar.
+
+6.  Describe the spatial patterns revealed by the KDE and Spatio-temporal KDE maps.
+
+## 1.1 Importing Packages
+
 I will be using the following packages in my project:
+
+-   sf for importing, managing and processing geospatial data
+
+-   raster reads, writes, manipulates, analyses and model of gridded spatial data (raster)
+
+-   spatstat which provides a wide range of useful functions for point pattern analysis
+
+-   tmap which provides functions for plotting cartographic quality static or interactive maps
+
+-   tidyverse to perform common data science tasks including and not limited to data import, data transformation, data wrangling and data visualisation
+
+-   sparr to estimate fixed and adaptive kernel-smoothed spatial relative risks surfaces
+
+-   viridis which provides color palettes that are perceptually uniform
+
 ```{r}
-pacman::p_load(sf, raster, spatstat, tmap, tidyverse, devtools, sp, smoothr, viridis, sparr)
+pacman::p_load(sf, raster, spatstat, tmap, tidyverse, viridis, sparr)
 ```
 
-
 # 2.0 Importing Data
+
 ## 2.1 Importing polygon feature data - boundary data
-I edited the coordinates to fit Myanmar.
+To start off, I import the Myanmar boundary layer. This is extracted from the Myanmar Information Management Unit, MIMU: https://geonode.themimu.info/layers/geonode%3Ammr_polbnda_adm1_250k_mimu_1 
+
 ```{r}
-boundary_data_sf <- st_read(dsn = "data", layer = "mmr_polbnda2_adm1_250k_mimu_1") %>% 
-  st_transform(crs=32647)
+boundary_data_sf <- st_read(dsn = "data", layer = "mmr_polbnda2_adm1_250k_mimu_1")
+```
+
+```{r}
+st_crs(boundary_data_sf)
+```
+I transformed the CRS to 32647 which is the coordinates of Myanmar to ensure that everything is mapped correctly and if there is a need to overlay different datasets, it would be accurate.
+```{r}
+boundary_data_sf <- boundary_data_sf %>% st_transform(crs = 32647)
+st_crs(boundary_data_sf)
 ```
 
 ## 2.2 Importing conflict data
-Converted the latitude and longitude to standardized the projection system
+I then import the conflict data which I converted the latitude and longitude to standardized the projection system and changed the CRS to Myanmar coordinate which is 32647.
+
+```{r}
+acled_data_sf <- read_csv("data/2021-01-01-2024-06-30-Southeast_Asia-Myanmar.csv") 
+```
+
+```{r}
+summary(acled_data_sf)
+```
+
+```{r}
+st_crs(acled_data_sf)
+```
+
 ```{r}
 #| eval: false
-acled_data_sf <- read_csv("data/2021-01-01-2024-06-30-Southeast_Asia-Myanmar.csv") %>%
+acled_data_sf <- acled_data_sf %>%
   st_as_sf(coords = c(
     "longitude", "latitude"), crs=4326) %>% 
   st_transform(crs = 32647) %>% 
   mutate(event_date = dmy(event_date))
 ```
 
-# 3.0 Data Wrangling
-Creating another column "quarter" so that I can split them up into quarters for KDE plot. I also filtered the event types - Battles, Strategic developments, Violence against civilians and Explosion/Remote violence. I then 
+# 3.0 Data Preprocessing
+I created another column "quarter" so that I can split the data up into quarters for the future plots in the next part. I made use of the event_date column and the year to create the "quarter" column.
+
+I also filtered the event types - Battles, Strategic developments, Violence against civilians and Explosion/Remote violence and removed the rest of the data which helped me reduce the size of my data since it is too huge. I would be focusing on these 4 types of events that I have filtered out.
+
+Before further data manipulation, I save the edited data in rds format so that the data preprocessing steps will not have to be ran again.
+
 ```{r}
 #| eval: false
 acled_data_quarter_sf <- acled_data_sf %>%
   mutate(quarter = quarter(event_date, with_year=TRUE),
          year = year(event_date),
          quarter_year = paste(year, quarter, sep = "Q"))
+```
 
+```{r}
+#| eval: false
 conflict_events_sf <- acled_data_quarter_sf %>%
   filter(event_type %in% c("Battles", "Strategic developments", "Violence against civilians", "Explosion/Remote violence"))
+```
 
+```{r}
+#| eval: false
 write_rds(conflict_events_sf, "data/rds/conflict_events_sf.rds")
 ```
 
+Read the files in rds format.
 ```{r}
 #| echo: false
 conflict_events_sf <- read_rds("data/rds/conflict_events_sf.rds")
 ```
 
+```{r}
+conflict_events_sf
+```
+
 ## 3.1 Myanmar Boundaries
+Below is the plot of the Myanmar boundary map.
+
 ```{r}
 plot(st_geometry(boundary_data_sf))
 ```
 
-Group the dataset based on quarterly. 
+## 3.2 Group the dataset based on quarterly
+Since my plots will be based on quarterly, I grouped the dataset quarterly based on the quarter column.
+
 ```{r}
 conflict_2021_1q <- conflict_events_sf[conflict_events_sf$quarter == 2021.1, ]
 conflict_2021_2q <- conflict_events_sf[conflict_events_sf$quarter == 2021.2, ]
@@ -79,6 +156,7 @@ conflict_2024_1q <- conflict_events_sf[conflict_events_sf$quarter == 2024.1, ]
 conflict_2024_2q <- conflict_events_sf[conflict_events_sf$quarter == 2024.2, ]
 ```
 
+## 3.3 Convert the dataframes to sp's Spatial class
 
 ```{r}
 conflict_2021_1q_spatial <- as_Spatial(conflict_2021_1q)
@@ -98,6 +176,14 @@ conflict_2024_2q_spatial <- as_Spatial(conflict_2024_2q)
 boundary <- as_Spatial(boundary_data_sf)
 ```
 
+I take one of the converted dataframe to verify that it has been converted to spatial class.
+
+```{r}
+conflict_2024_1q_spatial
+```
+
+## 3.4 Convert the Spatial classes into sp objects
+
 ```{r}
 conflict_2021_1q_sp <- as(conflict_2021_1q_spatial, "SpatialPoints")
 conflict_2021_2q_sp <- as(conflict_2021_2q_spatial, "SpatialPoints")
@@ -115,6 +201,14 @@ conflict_2024_1q_sp <- as(conflict_2024_1q_spatial, "SpatialPoints")
 conflict_2024_2q_sp <- as(conflict_2024_2q_spatial, "SpatialPoints")
 boundary_sp <- as(boundary, "SpatialPolygons")
 ```
+
+Similarly to above, I take one of the objects to verify that it has been converted.
+
+```{r}
+conflict_2021_1q_sp
+```
+
+## 3.5 Convert the sp format into ppp objects
 
 ```{r}
 conflict_2021_1q_ppp <- as.ppp(st_coordinates(conflict_2021_1q), st_bbox(conflict_2021_1q))
@@ -136,74 +230,73 @@ conflict_2024_1q_ppp <- as.ppp(st_coordinates(conflict_2024_1q), st_bbox(conflic
 conflict_2024_2q_ppp<- as.ppp(st_coordinates(conflict_2024_2q), st_bbox(conflict_2024_2q))
 
 ```
-Remove the duplicated values from each quarter each year
+
+```{r}
+conflict_2021_1q_ppp
+```
+
+As seen from above, the data contains duplicated points. Therefore, I will remove the duplicated values from each quarter each year using the jittering approach.
+
 ```{r}
 par(mfrow=c(1, 4))
 sum(multiplicity(conflict_2021_1q_ppp) > 1)
 conflict_2021_1q_ppp_jit <- rjitter(conflict_2021_1q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2021_1q_ppp_jit)
-
 sum(multiplicity(conflict_2021_2q_ppp) > 1)
 conflict_2021_2q_ppp_jit <- rjitter(conflict_2021_2q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2021_2q_ppp_jit)
-
 sum(multiplicity(conflict_2021_3q_ppp) > 1)
 conflict_2021_3q_ppp_jit <- rjitter(conflict_2021_3q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2021_3q_ppp_jit)
-
 sum(multiplicity(conflict_2021_4q_ppp) > 1)
 conflict_2021_4q_ppp_jit <- rjitter(conflict_2021_4q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2021_4q_ppp_jit)
-
 sum(multiplicity(conflict_2022_1q_ppp) > 1)
 conflict_2022_1q_ppp_jit <- rjitter(conflict_2022_1q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2022_1q_ppp_jit)
-
 sum(multiplicity(conflict_2022_2q_ppp) > 1)
 conflict_2022_2q_ppp_jit <- rjitter(conflict_2022_2q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2022_2q_ppp_jit)
-
 sum(multiplicity(conflict_2022_3q_ppp) > 1)
 conflict_2022_3q_ppp_jit <- rjitter(conflict_2022_3q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2022_3q_ppp_jit)
-
 sum(multiplicity(conflict_2022_4q_ppp) > 1)
 conflict_2022_4q_ppp_jit <- rjitter(conflict_2022_4q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2022_4q_ppp_jit)
-
 sum(multiplicity(conflict_2023_1q_ppp) > 1)
 conflict_2023_1q_ppp_jit <- rjitter(conflict_2023_1q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2023_1q_ppp_jit)
-
 sum(multiplicity(conflict_2023_2q_ppp) > 1)
 conflict_2023_2q_ppp_jit <- rjitter(conflict_2023_2q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2023_2q_ppp_jit)
-
 sum(multiplicity(conflict_2023_3q_ppp) > 1)
 conflict_2023_3q_ppp_jit <- rjitter(conflict_2023_3q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2023_3q_ppp_jit)
-
 sum(multiplicity(conflict_2023_4q_ppp) > 1)
 conflict_2023_4q_ppp_jit <- rjitter(conflict_2023_4q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2023_4q_ppp_jit)
-
 sum(multiplicity(conflict_2024_1q_ppp) > 1)
 conflict_2024_1q_ppp_jit <- rjitter(conflict_2024_1q_ppp, retry=TRUE, nsim=1, drop=TRUE)
-plot(conflict_2024_1q_ppp_jit)
-
 sum(multiplicity(conflict_2024_1q_ppp) > 1)
 conflict_2024_2q_ppp_jit <- rjitter(conflict_2024_2q_ppp, retry=TRUE, nsim=1, drop=TRUE)
+
+plot(conflict_2021_1q_ppp_jit)
+plot(conflict_2021_2q_ppp_jit)
+plot(conflict_2021_3q_ppp_jit)
+plot(conflict_2021_4q_ppp_jit)
+plot(conflict_2022_1q_ppp_jit)
+plot(conflict_2022_2q_ppp_jit)
+plot(conflict_2022_3q_ppp_jit)
+plot(conflict_2022_4q_ppp_jit)
+plot(conflict_2023_1q_ppp_jit)
+plot(conflict_2023_2q_ppp_jit)
+plot(conflict_2023_3q_ppp_jit)
+plot(conflict_2023_4q_ppp_jit)
+plot(conflict_2024_1q_ppp_jit)
 plot(conflict_2024_2q_ppp_jit)
 
 ```
 
-Creating owin objects
+## 3.6 Creating owin objects
+
+To confine the analysis with Myanmar geographical area, I created the owin object of Myanmar boundary.
+
 ```{r}
 boundary_owin <- as.owin(boundary_data_sf)
 ```
 
-## 3.2 Combining point event object and owin object
-Extract events that are located in Myanmar. 
+## 3.7 Combining point event object and owin object
+
+In this section, I extract events that are located in Myanmar. The output of this combines both the point and polygon feature into one ppp class.
+
 ```{r}
 owin_2021_1q_ppp = conflict_2021_1q_ppp_jit[boundary_owin]
 owin_2021_2q_ppp = conflict_2021_2q_ppp_jit[boundary_owin]
@@ -221,11 +314,69 @@ owin_2024_1q_ppp = conflict_2024_1q_ppp_jit[boundary_owin]
 owin_2024_2q_ppp = conflict_2024_2q_ppp_jit[boundary_owin]
 ```
 
+I then add all the output into a owin_list which I will loop through later on to plot the KDE layers.
+
 ```{r}
 owin_list = list(owin_2021_1q_ppp, owin_2021_2q_ppp, owin_2021_3q_ppp, owin_2021_4q_ppp, owin_2022_1q_ppp, owin_2022_2q_ppp, owin_2022_3q_ppp, owin_2022_4q_ppp, owin_2023_1q_ppp, owin_2023_2q_ppp, owin_2023_3q_ppp, owin_2023_4q_ppp, owin_2024_1q_ppp, owin_2024_2q_ppp)
 ```
 
+```{r}
+par(mfrow=c(1,4))
+for (i in 1:length(owin_list)) {
+  owin_ppp = rescale.ppp(owin_list[[i]], 1000, "km")
+  plot(owin_ppp, main= paste("Plot ", i))
+}
+```
+
 # 4.0 Quarterly KDE layers
+I first compute the KDE using automatic bandwidth selection method. I tried bw.diggle and bw.ppl.
+
+```{r}
+par(mfrow=c(1,4))
+for (i in 1:length(owin_list)) {
+  owin_bw <- density(owin_list[[i]], sigma=bw.diggle, edge=TRUE, kernel="gaussian")
+  plot(owin_bw, main = paste("KDE Plot for ", i))
+}
+```
+
+```{r}
+par(mfrow=c(1,4))
+for (i in 1:length(owin_list)) {
+  owin_bw <- density(owin_list[[i]], sigma=bw.ppl, edge=TRUE, kernel="gaussian")
+  plot(owin_bw, main = paste("KDE Plot for ", i))
+}
+```
+
+The density values of the output is too small. The default unit of measurement of EPSG: 32647 is in meter which means that the density values are computed in number of points per square meter.
+
+```{r}
+bw_diggle = list()
+for (i in 1:length(owin_list)) {
+  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
+  bw <- bw.diggle(owin.km)
+  bw_diggle[[i]] <- bw
+}
+```
+
+```{r}
+bw_diggle
+```
+
+```{r}
+bw_ppl = list()
+for (i in 1:length(owin_list)) {
+  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
+  bw <- bw.ppl(owin.km)
+  bw_ppl[[i]] <- bw
+}
+```
+
+```{r}
+bw_ppl
+```
+
+I converted the unit of measurement from meter to kilometer and ran density() again to rescale the data set and plot the output kde map for each quarter.
+
 ```{r}
 par(mfrow=c(1,4))
 for (i in 1:length(owin_list)) {
@@ -235,42 +386,8 @@ for (i in 1:length(owin_list)) {
 }
 ```
 
-```{r}
-par(mfrow=c(1,4))
-for (i in 1:length(owin_list)) {
-  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
-  owin_bw <- density(owin.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
-  plot(owin_bw, main = paste("KDE Plot for ", i))
-}
-```
+I tried to compute the KDE layer be defining the bandwidth of 15000 meter in hopes of illuminating the map more.
 
-```{r}
-bw_diggle = list()
-for (i in 1:length(owin_list)) {
-  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
-  bw <- bw.diggle(owin.km)
-  bw
-}
-```
-
-```{r}
-for (i in 1:length(owin_list)) {
-  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
-  bw <- bw.ppl(owin.km)
-  bw
-}
-```
-
-```{r}
-par(mfrow=c(1,4))
-for (i in 1:length(owin_list)) {
-  owin.km <- rescale.ppp(owin_list[[i]], 1000, "km")
-  owin_bw <- density(owin.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
-  plot(owin_bw, main = paste("KDE Plot for ", i))
-}
-```
-
-I tried to set a higher bandwidth in order to illuminate the map more.
 ```{r}
 par(mfrow=c(1,4))
 sigm <- 15.0
@@ -283,10 +400,34 @@ for (i in 1:length(owin_list)) {
   owin_bw_list[[paste0("owin_bw_", i)]] <- owin_bw
 }
 ```
-From the KDE plots, the number of conflicts increased in the first, second and fourth quarter in 2022 and the first, second and third quarter in 2023.  
+
+From the KDE plots, I have observed that:
+
+1.  the number of conflicts increased in the first, second and fourth quarter in 2022 and the first, second and third quarter in 2023
+
+2.  Across the quarters, the conflicts are more clustered in 3 regions of Myanmar - Sagaing, Mandalay, Magway which is the more centralised in Myanmar.
+
+## 4.1 Nearest Neighbour Analysis
+To perform Confirmatory Spatial Point Pattern Analysis, I will be using Nearest Neighbour statistics where I will perform the Clark-Evans test.
+
+H0: The distribution of conflicts are randomly distributed.
+
+H1: The distribution of conflicts are not randomly distributed.
+
+A 95% confident interval will be used.
+
+```{r}
+for (i in 1:length(owin_list)){
+  results <- clarkevans.test(owin_list[[i]], correction="none", clipregion="boundary_owin", alternative=c('clustered'), nsim=99)
+  print(results)
+}
+```
+
+From the test results, with p<0.05, the null hypothesis of conflicts being randomly distributed are rejected.
 
 # 5.0 2nd-order Spatial
 Looking at the KDE plots, most of the conflicts seem to be happening in the regions. Therefore, I want to find out more about the conflicts in the regions. I filter the data to focus on Region.
+
 ```{r}
 #| eval: false
 region_sf <- boundary_data_sf[boundary_data_sf$ST_RG == 'Region',]
@@ -299,8 +440,18 @@ region_sf <- read_rds("data/rds/region_sf.rds")
 ```
 
 ```{r}
+region_sf
+```
+
+## 5.1 Creating owin object
+To confine the analysis within a geographical area of the Region boundaries, I created the owin object.
+
+```{r}
 region_owin = as.owin(region_sf)
 ```
+
+## 5.2 Combining point events object and owin object
+Making use of the objects that was created earlier after removing the duplicated values, I combine them with the owin object to extract conflicts within the regions in Myanmar. I then added all of the output objects into a list
 
 ```{r}
 region_2021_1q_owin <- conflict_2021_1q_ppp_jit[region_owin]
@@ -324,14 +475,15 @@ region_owin_list = list(region_2021_1q_owin, region_2021_2q_owin, region_2021_3q
 ```
 
 ```{r}
+par(mfrow=c(1,4))
 for (i in 1:length(region_owin_list)) {
   region_ppp.km = rescale.ppp(region_owin_list[[i]], 1000, "km")
   plot(region_ppp.km, main= paste("Region plot ", i))
 }
 ```
 
-## 5.1 Region F Function
-Unfortunately, L and K function are too computationally intensive to run on all points and it has a runtime of O(n^2) which my computer would not be able to support. Therefore, I will be using the F function to see if the conflict points are randomly distributed, clustered or regularly distributed.
+## 5.3 Region F Function
+Unfortunately, L and K function are too computationally intensive to run on all points and it has a runtime of O(n\^2) which my computer would not be able to support. Therefore, I will be using the F function to see if the conflict points are randomly distributed, clustered or regularly distributed.
 ```{r}
 for (i in 1:length(region_owin_list)) {
   region_ppp.km = rescale.ppp(region_owin_list[[i]], 1000, "km")
@@ -340,9 +492,12 @@ for (i in 1:length(region_owin_list)) {
   plot(F_region.csr, main=paste("F_region ", i))
 }
 ```
-From the plots here, since the emperical curve falls below the envelope curve, we can conclude that the points are more regularly distributed than randomly distributed in each region.
+
+From the plot, since the empirical curve falls below the envelope curve, we can conclude that the points are more regularly distributed than randomly distributed in each region.
 
 # 6.0 Spatio-temporal KDE layers
+I created a table with 2 columns by extracting information for the conflicts dataset. One of the column is named "quarter_num" where the values are integer from 1 to 14, each representing a quarter.2021.1 is represented by 1, 2021.2 is represented by 2, 2021.3 is represented by 3, 2021.4 is represented by 4, 2022.1 is represented by 5 and so on. The other column is the "geometry column". I then save the data into a rds file so that this step does not have to be ran again, saving computational power.
+
 ```{r}
 #| eval: false
 conflict_quarter <- conflict_events_sf %>% select(quarter) %>%
@@ -359,6 +514,30 @@ conflict_quarter <- read_rds("data/rds/conflict_quarter.rds")
 ```
 
 ```{r}
+boundary_owin
+```
+
+```{r}
+class(boundary_owin)
+```
+
+## 6.0 Visualising the Conflict Points
+### 6.0.1 Overall plot
+
+```{r}
+tm_shape(boundary_data_sf) + tm_polygons() + tm_shape(conflict_events_sf) + tm_dots()
+```
+
+### 6.0.2 Geographic distribution of conflicts by quarter
+
+```{r}
+tm_shape(boundary_data_sf) + tm_polygons() + tm_shape(conflict_quarter) + tm_dots(size=0.1) + tm_facets(by="quarter_num", free.coords = FALSE, drop.units = TRUE)
+```
+
+## 6.1 Computing Spatio Temporal KDE by Quarter
+Using the data that was created in 6.0, I create the ppp object. as.ppp() function only need the mark field and the geometry field.
+
+```{r}
 conflict_quarter_ppp <- as.ppp(conflict_quarter)
 conflict_quarter_ppp
 ```
@@ -367,7 +546,9 @@ conflict_quarter_ppp
 summary(conflict_quarter_ppp)
 ```
 
-Seen from the summary above, there are duplicated points. Therefore, I will be removing them since duplicated points will skew density estimates. I will save them in a rds file so that I do not have to remove the duplicated values again.
+### 6.1.1 Removing duplicated values
+Seen from the summary above, there are duplicated points. Therefore, I will be removing them using the jittering method since duplicated points will skew density estimates. I will save them in a rds file so that I do not have to remove the duplicated values again.
+
 ```{r}
 #| eval: false
 sum(multiplicity(conflict_quarter_ppp) > 1)
@@ -383,6 +564,10 @@ conflict_quarter_ppp_jit <- read_rds("data/rds/conflict_quarter_ppp_jit.rds")
 summary(conflict_quarter_ppp_jit)
 ```
 
+### 6.1.2 Creating owin object
+
+To confine the analysis within a geographical area of the Region boundaries, I created the owin object.
+
 ```{r}
 conflict_quarter_owin <- conflict_quarter_ppp_jit[boundary_owin]
 summary(conflict_quarter_owin)
@@ -392,15 +577,15 @@ summary(conflict_quarter_owin)
 plot(conflict_quarter_owin)
 ```
 
-## 6.1 Computing Spatio-temporal KDE
+### 6.1.3 Compute STKDE
+
 ```{r}
 st_conflict <- spattemp.density(conflict_quarter_owin)
 summary(st_conflict)
 ```
 
 ## 6.2 Plot the Spatio-temporal KDE layers
-Instead of representing the quarters with 2021.1, 2021.2 etc, I edited it and used integer to represent each quarter. 
-2021.1 is represented by 1, 2021.2 is represented by 2, 2021.3 is represented by 3, 2021.4 is represented by 4, 2022.1 is represented by 5 and so on.
+
 ```{r}
 quarter <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
 st_kde_plots <- list()
@@ -414,18 +599,20 @@ for(i in quarter){
   st_kde_plots[[i]] <- recordPlot()
 }
 ```
+From the STKDE plots, I can observe that the conflicts are clustered within the regions that are central of Myanmar and that 2022 is the year with the highest conflicts compared to the other 3 years. In 2024 second quarter, conflicts have also started in the south of Myanmar where there are pink spots. These spots have not been observed previously in the other quarters.
 
 # 7.0 2nd-order spatio-temporal point patterns analysis
+Similarly to above, due to computational power, I will be using F function to see if the conflict points are randomly distributed, clustered or regularly distributed.
 ```{r}
 F_conflict = Fest(conflict_quarter_owin)
 F_conflict.csr <- envelope(conflict_quarter_owin, Fest, nsim=99)
-plot(F_conflict.csr, main=paste("F_conflict ", i))
+plot(F_conflict.csr, main=paste("F_conflict.csr"))
 ```
 
-From the graph above, the events are clustered.
+From the plot, since the empirical curve falls below the envelope curve, we can conclude that the points are clustered.
 
 # 8.0 Plot on Openstreetmap of myanmar
-Convert the KDE output to grid object and raster object. I saved the raster objects into a folder so that I can load it from there immediately the next time I run this.
+I convert the KDE output to grid object and raster object. I saved the raster objects into a folder so that I can load it from there immediately the next time it runs, saving computational power.
 ```{r}
 #| eval: false
 for(i in 1:length(owin_bw_list)){
@@ -435,6 +622,7 @@ for(i in 1:length(owin_bw_list)){
   writeRaster(kde_conflict_mmr_bw_raster, paste0("data/raster/kde_myanmar_", i, ".tif"), format = "GTiff", overwrite = TRUE)
 }
 ```
+
 
 ## 8.1 KDE Plots
 Since previously I have saved the raster plot, I load them and put them into a list so that I can loop through the list and plot the quarterly KDE on the OpenStreetMap.
@@ -460,7 +648,7 @@ kde_raster_list <- list(kde_raster_1, kde_raster_2, kde_raster_3, kde_raster_4, 
 
 ```{r}
 par(mfrow=c(1,4))
-tmap_mode("view")
+tmap_mode("plot")
 for (i in 1:length(kde_raster_list)){
   map <- tm_shape(kde_raster_list[[i]]) +
     tm_raster(palette="viridis",n=5, style="pretty", alpha=0.6, title = paste("KDE at quarter", i)) + 
@@ -471,15 +659,18 @@ for (i in 1:length(kde_raster_list)){
   print(map)
 }
 ```
+From all the plots above, I observed that most of the conflict are concentrated around the central region of Myanmar which was similar to what had been observed earlier. KDE Quarterly 9 to KDE Quarterly 11 plots have the highest concentrations of conflicts compared to the other plots as indicated by the yellow areas. KDE Quarterly 9 represents 2023 Q1, KDE Quarterly 10 represents 2023 Q2 and KDE Quarterly 11 represents 2023 Q3. 
+
+Majority of the country shows lower concentrations of conflicts (coloured in dark purple) as seen from across all the plots.
 
 ## 8.2 Spatio-temporal KDE Plots
-
+From the STKDE plots, I retrieve the list of quarters which will be used to plot the STKDE plots.
 ```{r}
 st_conflict_z <- st_conflict$z
 ```
 
 ```{r}
-tmap_mode("view")
+tmap_mode("plot")
 for (time_point in names(st_conflict_z)){
   density_conflict <- st_conflict_z[[time_point]]
   raster_conflict <- raster(density_conflict)
@@ -495,5 +686,11 @@ for (time_point in names(st_conflict_z)){
   print(st_map)
 }
 ```
-    
-    
+From the plots above, besides having high concentration of conflicts in the centralised area of Myanmar, there are also quite a few areas in the South with high concentration of conflicts that are coloured yellow. Some examples are Spatiotemporal KDE Quarterly 2 (2021 Q2), 3 (2021 Q3), 4 (2021 Q4) and 7 (2022 Q3).
+
+While comparing all the graphs, I realised that the conflict points in Spatiotemporal KDE Quarterly 3 (2021 Q3) are spread out that does not cover only the centralised region but also the southeast and northeast. 
+
+KDE Quarterly 12 (2023 Q4) has high concentrations of conflicts not just in the centralised area of Myanmar but also near the northeast borders of Myanmar.
+
+# 9.0 Conclusion
+Through this exercise, we have found out more about the conflicts in Myanmar and that they are mostly in the centralised regions in Myanmar - Sagaing, Magway and Mandalay. Through this analysis, it can help in resource allocation where disaster response or healthcare can be prioritised to high-density areas shown in the analysis plots. Authorities could focus resources and policies in regions with higher concentrations to address the underlying issues effectively. Plotting the KDE plots and STKDE plots on Openstreetmap has helped with effective understanding on the conflicts in Myanmar.
