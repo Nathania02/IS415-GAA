@@ -1,0 +1,124 @@
+---
+title: "In-class Ex 6"
+author: "Nathania Yeo"
+date: "September 23, 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true
+  freeze: true
+---
+
+# 1.0 Import Packages
+```{r}
+pacman::p_load(sf, tmap, sfdep, tidyverse)
+```
+
+# 2.0 Import Data
+```{r}
+hunan <- st_read(dsn = "data/geospatial", layer = "Hunan")
+```
+
+```{r}
+hunan_2012 <- read_csv("data/aspatial/Hunan_2012.csv")
+```
+```{r}
+hunan_GDPPC <- left_join(hunan, hunan_2012) %>% select(1:4, 7, 15)
+```
+# 3.0 Global measures of Spatial Association
+## 3.1 Deriving Queen's contiguity weights
+```{r}
+wm_q <- hunan_GDPPC %>% 
+  mutate(nb = st_contiguity(geometry),
+         wt = st_weights(nb, style="W"),
+         .before=1)
+```
+st_weights provide three arguments - nb (a neighbour list object as created by st_neighbours), style (default "W" for row standardized weights. This value can also be "B", "C", "U", "minimax" and "S". B is the basic binary coding, W is row standardized - sums over all links to n, C is globally standardised - sums over all links to n, U C/number of neighbours - sums over all links to unity, while S is the variance stabilizing coding scheme proposed by Tiefelsdorf et al. 1999), allow_zero (if TRUE, assigns 0 as lagged value to zone without neighbours.)
+
+## 3.2 Computing Global Moran's I
+```{r}
+moranI <- global_moran(wm_q$GDPPC, wm_q$nb, wm_q$wt)
+glimpse(moranI)
+```
+## 3.3 Performing Global Moran's I test
+```{r}
+global_moran_test(wm_q$GDPPC, wm_q$nb, wm_q$wt)
+```
+p-value<0.05, null hypothesis is rejected.
+Moran I statistics is positive at 0.3 which means low clustering. 
+
+## 3.4 Performing Global Moran's Permutation test
+```{r}
+set.seed(1234) # ensure that computation is reproducible
+global_moran_perm(wm_q$GDPPC, wm_q$nb, wm_q$wt, nsim=99)
+```
+
+# 4.0 Global measures of Spatial Association
+## 4.1 Computing local Moran's I
+```{r}
+lisa <- wm_q%>% 
+  mutate(local_moran = local_moran(
+    GDPPC, nb, wt, nsim=99),
+    .before=1) %>%
+  unnest(local_moran) # put it back to one single tibble table
+```
+
+## 4.2 Visualising local Moran's I
+```{r}
+tmap_mode("plot")
+tm_shape(lisa) + tm_fill("ii") + tm_borders(alpha=0.5) + tm_view(set.zoom.limits = c(6,8)) + tm_layout(main.title="local Moran's I of G", main.title.size = 2)
+```
+
+## 4.3 Visualising p-value of local Moran's I
+```{r}
+tmap_mode("plot")
+tm_shape(lisa) + tm_fill("p_ii_sim") + tm_borders(alpha=0.5) + tm_view(set.zoom.limits = c(6,8)) + tm_layout(main.title="p-value of local Moran's I of G", main.title.size = 2)
+```
+
+## 4.4 Visualising local Moran's I and p-value
+```{r}
+tmap_mode("plot")
+map1 <- tm_shape(lisa) + tm_fill("ii") + tm_borders(alpha=0.5) + tm_view(set.zoom.limits = c(6,8)) + tm_layout(main.title="local Moran's I of G", main.title.size = 0.8)
+
+map2 <- tm_shape(lisa) + tm_fill("p_ii", breaks = c(0, 0.001, 0.01, 0.05, 1), labels=c("0.001", "0.01", "0.05", "Not sig")) + tm_borders(alpha=0.5) + tm_view(set.zoom.limits = c(6,8)) + tm_layout(main.title="p-value of local Moran's I of G", main.title.size = 0.8)
+
+tmap_arrange(map1, map2, ncol=2)
+```
+
+# 5.0 Visualising LISA map
+```{r}
+lisa_sig <- lisa %>%
+  filter(p_ii<0.05)
+tmap_mode("plot")
+tm_shape(lisa) + tm_polygons() + tm_borders(alpha = 0.5) + tm_shape(lisa_sig) + tm_fill("mean") + tm_borders(alpha=0.4)
+```
+
+# 6.0 Hot spot and Cold spot Area analysis (HCSA)
+## 6.1 Computing local Gi* statistics
+Will need to derive a spatial weight matrix before computing local Gi* statistics. 
+```{r}
+wm_idw <- hunan_GDPPC %>% 
+  mutate(nb=st_contiguity(geometry),
+         wts=st_inverse_distance(nb, geometry, scale=1, alpha=1),
+         .before=1)
+```
+```{r}
+HCSA <- wm_idw%>% 
+  mutate(local_Gi = local_gstar_perm(
+  GDPPC, nb, wt, nsim=99),
+  .before=1) %>% 
+  unnest(local_Gi)
+HCSA
+```
+## 6.2 Visualising hot spot and cold spot areas
+```{r}
+HCSA_sig <- HCSA %>% filter(p_sim<0.05)
+tmap_mode("plot")
+tm_shape(HCSA) + tm_polygons() + tm_borders(alpha=0.05) + tm_shape(HCSA_sig) + tm_fill("gi_star") + tm_borders(alpha=0.4)
+```
+
+Figure above revelas that there is one hot spot area and two cold pot areas. The hot spot areas coincide with the High-high cluster identifies by using local Moran's I method in the earlier sub-section.
+
+
+
+
