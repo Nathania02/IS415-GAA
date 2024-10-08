@@ -1,0 +1,81 @@
+---
+title: "Take Home Assignment 2"
+author: "Nathania Yeo"
+date: "September 24, 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true
+  freeze: true
+---
+
+# 1.0 Introduction
+
+Drug abuse is associated with significant negative health, financial and social consequences. Yet, illicit drug consumption remains highly prevalent and continues to be a growing problem worldwide. In 2021, 1 in 17 people aged 15–64 in the world had used a drug in the past 12 months. Notwithstanding population growth, the estimated number of drug users grew from 240 million in 2011 to 296 million in 2021.
+
+The geopolitics of Thailand which is near the [Golden Triangle](https://en.wikipedia.org/wiki/Golden_Triangle_(Southeast_Asia)) of Indochina, the largest drug production site in Asia, and the constant transportation infrastructure development made Thailand became market and transit routes for drug trafficking to the third countries.
+
+In Thailand, drug abuse is one of the major social issue. There are about 2.7 million youths using drugs in Thailand. Among youths aged between 15 and 19 years, there are about 300,000 who have needs for drug treatment. Most of Thai youths involved with drugs are vocational-school students, which nearly doubles in number compared to secondary-school students.
+
+## 1.1 Importing Packages
+
+```{r}
+pacman::p_load(sf, spdep, tmap, tidyverse)
+```
+
+# 2.0 Importing Data
+```{r}
+boundary_data <- st_read(dsn = "data", layer = "tha_admbnda_adm1_rtsd_20220121")
+```
+```{r}
+st_crs(boundary_data) 
+boundary_data <- boundary_data %>% st_transform(crs=32647)
+st_crs(boundary_data)
+```
+
+```{r}
+drug_offences <- read_csv("data/thai_drug_offenses_2017_2022.csv")
+```
+```{r}
+plot(boundary_data)
+```
+
+# 3.0 Data Preprocessing
+## 3.1 Join table together
+Join the data by left join. province_th and ADM1_TH is the same
+```{r}
+drug_offences <- left_join(drug_offences, boundary_data, by = c("province_th" = "ADM1_TH")) %>% select(1:7, 9, 21)
+```
+
+```{r}
+# st_crs(drug_offences)
+# drug_offences <- st_as_sf(drug_offences, geometry = "geometry", crs = st_crs(drug_offences))
+```
+
+```{r}
+# st_crs(drug_offences)
+```
+
+```{r}
+# equal <- tm_shape(drug_offences) +
+#   tm_fill("fiscal_year",
+#           n = 5,
+#           style = "equal") +
+#   tm_borders(alpha = 0.5) +
+#   tm_layout(main.title = "Equal interval classification")
+# 
+# quantile <- tm_shape(drug_offences) +
+#   tm_fill("fiscal_year",
+#           n = 5,
+#           style = "quantile") +
+#   tm_borders(alpha = 0.5) +
+#   tm_layout(main.title = "Equal quantile classification")
+# 
+# tmap_arrange(equal, 
+#              quantile, 
+#              asp=1, 
+#              ncol=2)
+```
+
+
+
