@@ -138,15 +138,6 @@ for (year in years) {
 }
 ```
 
-```{r}
-year_2017 <- read_rds("rds/drug_offense_year_2017.rds")
-year_2018 <- read_rds("rds/drug_offense_year_2018.rds")
-year_2019 <- read_rds("rds/drug_offense_year_2019.rds")
-year_2020 <- read_rds("rds/drug_offense_year_2020.rds")
-year_2021 <- read_rds("rds/drug_offense_year_2021.rds")
-year_2022 <- read_rds("rds/drug_offense_year_2022.rds")
-```
-
 
 # 4.0 Global Measures of Spatial Autocorrelation
 ## 4.1 Computing Contiguity Spatial Weights
