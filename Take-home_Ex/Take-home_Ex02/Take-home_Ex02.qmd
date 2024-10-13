@@ -10,7 +10,6 @@ execute:
 ---
 
 # 1.0 Introduction
-
 Drug abuse is associated with significant negative health, financial and social consequences. Yet, illicit drug consumption remains highly prevalent and continues to be a growing problem worldwide. In 2021, 1 in 17 people aged 15–64 in the world had used a drug in the past 12 months. Notwithstanding population growth, the estimated number of drug users grew from 240 million in 2011 to 296 million in 2021.
 
 The geopolitics of Thailand which is near the [Golden Triangle](https://en.wikipedia.org/wiki/Golden_Triangle_(Southeast_Asia)) of Indochina, the largest drug production site in Asia, and the constant transportation infrastructure development made Thailand became market and transit routes for drug trafficking to the third countries.
@@ -18,64 +17,466 @@ The geopolitics of Thailand which is near the [Golden Triangle](https://en.wikip
 In Thailand, drug abuse is one of the major social issue. There are about 2.7 million youths using drugs in Thailand. Among youths aged between 15 and 19 years, there are about 300,000 who have needs for drug treatment. Most of Thai youths involved with drugs are vocational-school students, which nearly doubles in number compared to secondary-school students.
 
 ## 1.1 Importing Packages
+For this take home exercise, 5 packages will be used. They are:
+1. sf: provides a standardised way to encode spatial vector data in R environment, facilitating spatial data operations and analysis.
+2. sfdep: for computing spatial weights, global and local spatial autocorrelation statistics
+3. tmap: for creating static and interactive visualisations and maps
+4. tidyverse: a collection of R packages designed for data science. All packages share an underlying design philosophy, grammar, and data structure.
+4. dplyr: to make data manipulation easier
 
 ```{r}
-pacman::p_load(sf, spdep, tmap, tidyverse)
+pacman::p_load(sf, sfdep, tmap, tidyverse, dplyr)
 ```
 
 # 2.0 Importing Data
+In this take home exercise, we will use 2 datasets. The first dataset is Thailand's Province Boundary whihch is the geospatial dataset. This data is in a ESRI shapefile format. It is extracted from the Thailand - Subnational Administrative Boundaries at HDX. The second dataset is the aspatial dataset which is the Thailand Drug Offenses [2017-2022] from Kaggle.
+
+## 2.1 Importing Geospatial Data
+I will use st_read() to import the dataset into the R environment. I then checked the coordinate reference system to check if the CRS value is correct. Since it has not been set, I convert the coordinate reference system to 32647 which is Thailand CRS value. 
 ```{r}
 boundary_data <- st_read(dsn = "data", layer = "tha_admbnda_adm1_rtsd_20220121")
 ```
 ```{r}
-st_crs(boundary_data) 
-boundary_data <- boundary_data %>% st_transform(crs=32647)
 st_crs(boundary_data)
+```
+```{r}
+boundary_data <- st_transform(boundary_data, crs = 32647)
 ```
 
 ```{r}
-drug_offences <- read_csv("data/thai_drug_offenses_2017_2022.csv")
+st_crs(boundary_data)
+
 ```
+I then plot the thailand province object to take a look at how the map looks like. 
 ```{r}
-plot(boundary_data)
+tmap_mode("plot")
+tm_shape(boundary_data)+
+  tm_fill(col="white")+
+  tm_borders(col = "black", lwd=0.3, alpha=0.6)+
+  tm_layout(
+    main.title = "Province (Thailand)",
+    main.title.size = 1,
+    main.title.position = "center",
+    legend.show = FALSE,
+     frame = FALSE)
 ```
+
+
+## 2.2 Importing Aspatial Dataset
+I used read_csv() to read the aspatial dataset into R environment. 
+```{r}
+drug_offenses <- read_csv("data/thai_drug_offenses_2017_2022.csv")
+```
+
+```{r}
+summary(drug_offenses)
+```
+
 
 # 3.0 Data Preprocessing
 ## 3.1 Join table together
-Join the data by left join. province_th and ADM1_TH is the same
+I joined the boundary data and the drug offenses data together using left_join(). Since the column "ADM1_TH" in boundary data matches the "provine_th" column in the drug offenses data, i made use of both of these column to join the tables. Since I will be analysing drug offences in the province level, I select the following columns that will be helpful to my analysis to create my new data: fiscal_year, types_of_drug_offenses, no_cases, geometry. 
 ```{r}
-drug_offences <- left_join(drug_offences, boundary_data, by = c("province_th" = "ADM1_TH")) %>% select(1:7, 9, 21)
+#| eval: false
+drug_offences_all <- left_join(boundary_data, drug_offenses, by = c("ADM1_TH" = "province_th")) %>% select(3, 17:19, 21)
+```
+
+## 3.2 Removal of data rows
+As the dataset is too big and I do not have enough computational power to analyse the entire dataset, I filtered out rows with the word "suspects" in the types of drug offenses column. I want to narrow my analysis and focus it on actual drug offenses that have already taken place. I then removed the column types_of_drug_offenses and processed the remaining data. I also found out that Phuket does not have any neighbouring province. I decided to remove it since it will not help in our analysis. 
+```{r}
+#| eval: false
+df_filtered <- drug_offences_all %>%
+  filter(!grepl("suspects", types_of_drug_offenses, ignore.case = TRUE))
 ```
 
 ```{r}
-# st_crs(drug_offences)
-# drug_offences <- st_as_sf(drug_offences, geometry = "geometry", crs = st_crs(drug_offences))
+#| eval: false
+df_filtered <- df_filtered %>%
+  filter(!grepl("Phuket", ADM1_EN, ignore.case=TRUE))
+```
+         
+
+```{r}
+#| eval: false
+df_filtered <- subset(df_filtered, select = -c(types_of_drug_offenses) )
+```
+
+## 3.3 Summing up number of drug offenses cases
+For this study, we are interested in finding out about the drug abuse in each province across the years from 2017 to 2022. Since the dataset is still too huge after performing the data preprocessing as mentioned above, I decided to sum the number of drug abuse up based on the province and the year. I then save this data into a rds file so that I would not have to waste computational power to run the data preprocessing steps again. 
+```{r}
+#| eval: false
+drug_offences_final <- df_filtered %>%
+  group_by(ADM1_EN, fiscal_year) %>%
+  summarise(total_cases = sum(no_cases, na.rm = TRUE),
+            geometry = first(geometry), .groups = 'drop')
 ```
 
 ```{r}
-# st_crs(drug_offences)
+#| eval: false
+write_rds(drug_offences_final, "rds/drug_offences.rds")
+for (year in names(yearly_data)) {
+  file_name <- paste0("rds/drug_offense_year_", year, ".rds")  # Create the file name
+  saveRDS(yearly_data[[year]], file = file_name)      # Save the data frame as an RDS file
+}
 ```
 
 ```{r}
-# equal <- tm_shape(drug_offences) +
-#   tm_fill("fiscal_year",
-#           n = 5,
-#           style = "equal") +
-#   tm_borders(alpha = 0.5) +
-#   tm_layout(main.title = "Equal interval classification")
-# 
-# quantile <- tm_shape(drug_offences) +
-#   tm_fill("fiscal_year",
-#           n = 5,
-#           style = "quantile") +
-#   tm_borders(alpha = 0.5) +
-#   tm_layout(main.title = "Equal quantile classification")
-# 
-# tmap_arrange(equal, 
-#              quantile, 
-#              asp=1, 
-#              ncol=2)
+drug_offences_final <- read_rds("rds/drug_offences.rds")
+```
+
+Besides saving the whole data, I also broke them down by year and save each year data into a rds file. 
+```{r}
+years <- unique(drug_offences_final$fiscal_year)
+
+# Create a list to store the data frames for each year
+yearly_data <- list()
+
+# Loop through each year and create a separate object for each
+for (year in years) {
+  yearly_data[[as.character(year)]] <- drug_offences_final %>%
+    filter(fiscal_year == year)
+}
+```
+
+```{r}
+year_2017 <- read_rds("rds/drug_offense_year_2017.rds")
+year_2018 <- read_rds("rds/drug_offense_year_2018.rds")
+year_2019 <- read_rds("rds/drug_offense_year_2019.rds")
+year_2020 <- read_rds("rds/drug_offense_year_2020.rds")
+year_2021 <- read_rds("rds/drug_offense_year_2021.rds")
+year_2022 <- read_rds("rds/drug_offense_year_2022.rds")
 ```
 
 
+# 4.0 Global Measures of Spatial Autocorrelation
+## 4.1 Computing Contiguity Spatial Weights
+Before computing the global spatial autocorrelation statistics, I will construct the spatial weights of the study area. This is used to define the neighbourhood relationships between the province in Thailand. I will make use of st_contiguity() to compute contiguity weight matrices for the study area. This function builds a neighbours list based on province with contiguous boundaries. For this study, I will use queen criteria to calculate the neighbour list. I loop through each year data and constructed the spatial weights for each year which I then added them into a list called nb_list. 
+```{r}
+nb_list <- list()
 
+# Loop through each year in the yearly_data list
+for (year in names(yearly_data)) {
+  # Get the data for the current year
+  data_for_year <- yearly_data[[year]]
+  nb_list[[year]] <- st_contiguity(data_for_year, queen = TRUE)
+  print(summary(nb_list[[year]]))
+}
+```
+
+## 4.2 Row standardized weights matrix
+Next, I assign the spatial weights to each neighbouring polygon. I will use the st_weights() function to supplement a neighbour list with spatial weights based on the selected coding scheme. I made use of W which represents row standardised weight matrix. This makes sure that the total value for each row sums up to 1. Row standardisation weight matrix makes sure that the weights are between 0 and 1. This helps in the interpretation of operation with weight matrix as an averaging of neighbouring values which allow for the spatial parameter to be comparable between models. Similarly to above, since there are multiple years, I loop through each year data and assign the spatial weights to each neighbouring polygon for each year.
+```{r}
+rswm_q_list <- list()
+wm_rs_list <- list()
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  wm_rs <- st_weights(nb_list[[year]], style = "W")
+  
+  rswm_q_list[[year]] <- data_for_year %>% mutate(nb=nb_list[[year]], wt=wm_rs, .before=1) 
+}
+```
+
+# 5.0 Global Measures of Spatial Autocorrelation: Moran's I
+## 5.1 Global Moran's I test
+The primary goal of this test is to see if the spatial autocorrelation is positive, negative or non-existent. The hypothesis of this test are:
+- H0: There is no spatial autocorrelation or negative spatial autocorrelation
+- H1: There is the presence of positive spatial autocorrelation
+
+In this test, I broke it down into each year to see if there are spatial autocorrelation for each year data.
+```{r}
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  result <- global_moran_test(rswm_q_list[[year]]$total_cases, rswm_q_list[[year]]$nb, rswm_q_list[[year]]$wt, alternative="greater")
+  print(year)
+  print(result)
+}
+
+```
+As seen from the results, across all the years, the Moran's I statistics is significantly higher and different from the expectation under the null hypothesis. This means that there is significant spatial autocorrelation in the data across the years. All the p-value for all years are below 0.05 which indicates that the spatial pattern is unlikely to be a result of random chance. In this case, we will reject the null hypothesis of no spatial autocorrelation. 
+
+In conclusion, the test results suggests that there is positive spatial autocorrelation in our study area. This means that provinces with similar number of drug abuse are more likely to be located near each other. 
+
+## 5.2 Global Moran's I Permutation test
+I then ran global_moran_perm() with nsim=999 which represent 1000 Monte Carlo simulations to be carried out. 
+```{r}
+gmoran_MC_list <- list()
+set.seed(1234)
+for (year in names(yearly_data)) {
+  # Get the data for the current year
+  data_for_year <- yearly_data[[year]]
+  gmoran_MC_list[[year]] <- global_moran_perm(rswm_q_list[[year]]$total_cases, rswm_q_list[[year]]$nb, rswm_q_list[[year]]$wt, nsim=999)
+  print(year)
+  print(gmoran_MC_list[[year]])
+}
+```
+
+From the output above, we can see that across all years, the results are almost identical to our results above using global_moran_test(). This means that our results is stable and is statistically significant. 
+
+## 5.3 Visualising Monte Carlo Moran's I
+I then plot 6 histograms, 1 for each year to look at the permutation results and compare them to the expected value under the null hypothesis.
+```{r}
+for (year in names(yearly_data)) {
+  # Get the data for the current year
+  data_for_year <- yearly_data[[year]]
+  xlab_title <- paste("Simulated Moran's I", year)
+  hist(gmoran_MC_list[[year]]$res, main="Histogram of Monte Carlo Moran's I Simulation Results", xlab=xlab_title, ylab = "Frequency")
+  abline(v=gmoran_MC_list[[year]]$statistic, col="red")
+}
+```
+
+# 6.0 Global Measures of Spatial Autocorrelation: Geary's C
+## 6.1 Geary's C test
+I decided to use Geary's C test. Through Geary's c statistics, it tells us the degree of intensity of a given feature in spatial objects described with the use of a weight matrix. From the results, we can tell the spatial autocorrelation in the data. Similar to above, I ran the results for each year. 
+```{r}
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  result <- global_c_test(rswm_q_list[[year]]$total_cases, rswm_q_list[[year]]$nb, rswm_q_list[[year]]$wt, alternative="greater")
+  print(year)
+  print(result)
+}
+```
+As seen from the results above, year 2017, 2019-2022 all have a Geary C statistics that is below the null hypothesis of 1. This suggests the presence of spatial autocorrelation in the data. In year 2018, we realised that the Geary C statistics is above the null hypothesis of 1. This means that there is either no spatial autocorrelation or there is negative spatial autocorrelation. 
+
+However, when we look closer to the p-value, we realised that across the years 2017-2021, all the p-value are more than 0.05. This indicates that the spatial pattern observed is likely to be the result of random chance. Therefore we accept the null hypothesis of no or negative spatial correlation for the years 2017-2021. 
+
+For 2022, the p-value is less than 0.05 which indicates that there is spatial pattern. Therefore, we reject the null hypothesis of no spatial correlation.
+
+In conclusion, the test results for 2017-2021 suggest that there is no or negative spatial autocorrelation in the study area. This means that the drug abuse could be randomly distributed or that the neighbouring province have dissimilar values of total cases of drug abuse. One possible reason that Geary's C results differ from Moran's I is that there could be outliers and local variations which Geary's C is more sensitive towards and hence, showing us a different result and conclusion from Moran's I. 
+
+## 6.2 Computing Geary's C Permutation Test
+```{r}
+globalGC_list <- list()
+set.seed(1234)
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  globalGC_list[[year]]=global_c_perm(rswm_q_list[[year]]$total_cases, rswm_q_list[[year]]$nb, rswm_q_list[[year]]$wt, nsim=999)
+  print(year)
+  print(globalGC_list[[year]])
+}
+```
+From the results above, we can observe that the statistics value is quite similar to those of Geary's C test. Therefore, we can confirm that the result is stable and statistically significant.
+
+## 6.3 Visualising the Monte Carlo Geary's C
+I plot 6 histograms, one for each year to look at the permutation results and compare them to the expected value under null hypothesis. 
+```{r}
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  xlab_title <- paste("Simulated Geary C", year)
+  hist(globalGC_list[[year]]$res, main="Histogram of Global Geary's C Monte-Carlo Simulation Results", xlab = xlab_title, ylab="Frequency")
+  abline(v=globalGC_list[[year]]$statistic, col="red")
+}
+```
+
+# 7.0 Local Measures of Spatial Autocorrelation
+To calculate Local Moran's I, the local_moran() function will be used.
+```{r}
+lisa_list <- list()
+local_moran_list <- list()
+
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  lisa_list[[year]] <- rswm_q_list[[year]] %>% mutate(local_moran=local_moran(total_cases, nb, wt, nsim=99),.before=1) %>%
+    unnest(local_moran)
+  local_moran_list[[year]] <- local_moran(rswm_q_list[[year]]$total_cases, rswm_q_list[[year]]$nb, rswm_q_list[[year]]$wt)
+  yearly_data[[year]] <- cbind(data_for_year, local_moran_list[[year]])
+  print(year)
+  print(local_moran_list[[year]])
+}
+```
+In this output, it contains the columns ii, eii, var_ii, z_ii, p_ii, p_ii_sim. Below are more details about each column.
+- ii: local Moran's I statistics
+- e_ii: expectation of local moran statistic under the randomisation hypothesis
+- var_ii: variance of local moran statistic under the randomisation hypothesis
+- z_ii: standard deviate of local moran statistic
+- p_ii: p-value of local moran statistc using pnorm()
+
+## 7.1 Mapping local Moran's I values
+In this section, I made used of tmap functions to visualise the Local Moran's I values across the study area. I will examine the Local Moran's I value with and without p-values. The p-value will provide more information of the statistical significance associated with each local Moran's I value.
+```{r}
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  map <- tm_shape(data_for_year) + 
+      tm_fill(col = "ii",
+              style = "pretty",
+              palette = "RdBu",
+              title=paste("Local Moran Statistics ", year)) +
+      tm_borders(alpha=0.5)
+  
+  map_pvalues <- tm_shape(data_for_year) + 
+    tm_fill(col = "p_ii_sim",
+            style = "pretty",
+            palette = "RdBu",
+            title=paste("Local Moran Statistics p-values ", year)) +
+    tm_borders(alpha=0.5)
+  
+  maps <- tmap_arrange(map, map_pvalues, asp=1, ncol=2)
+  print(maps)
+}
+```
+
+Focusing on the maps without p-values
+From the graphs, the colours can tell us which province may be outliers and which provinces tend to be spatial clusters. Those areas that are coloured blue tend to range 0.0 to 5. This suggests that these provinces tend to be spatial clusters which are similar values compared to neighbouring province. On the other hand, those province that are coloured Dark Orange and Light Orange usually ranges from -2 to 0. This suggests that these province tend to be an outlier which have dissimilar values compared to neighbouring province.
+
+Across the years, we can observed that province that are coloured orange became blue. The number of province coloured blue significantly increased in the year 2021, indicating that there is an increase in provinces that are spatial clusters with similar values of drug abuse when compared to their neighbouring province. 
+
+One thing that stood out was the province coloured dark orange among the blue provinces in the year 2022. With the only province coloured in dark orange, it indicates that this province is definitely an outlier. 
+
+Overall, we can see that the concentration of drug abuse cases are in the South, North West provinces as well as the central provinces. 
+
+Focusing on the maps with p-values
+Across the years, there are many provinces that have a statistically significant spatial autocorrelation. An example is that in the year 2022, there are province coloured dark blue in the map on the left with indicates spatial clusters where the neigbouring provinces have similar values. In the map on the right, the same provinces are coloured daek red which indicates statistially significant spatial autocorrelation. The results match and this shows that in these provinces, the spatial clustering is not random. These provinces either have low or high drug abuse cases. 
+
+
+# 8.0 Creating LISA Cluster Map
+LISA - Local Indicator of Spatial Association, provides us an indication of the extent of significant spatial clustering of similar values around the observation. In the analysis, it will calculate a local statistic value, a z-score, a pseudo p-value and a code representing the cluster type. There are two types of clusters: High-High and Low-Low as well as 2 types of outliers: High-Low and Low-High.
+
+High-High: Province with a high value of drug abuse cases, surrounded by neighbouring province with high values of drug abuse cases.
+High-Low: Province with a high value of drug abuse cases, surrounded by neighbouring province with low values of drug abuse cases.
+Low-High: Province with a low value of drug abuse cases, surrounded by neighbouring rrovince with high values of drug abuse cases.
+Low-Low: Province with a low value of drug abuse cases, surrounded by neighbouring province with low values of drug abuse cases.
+
+
+## 8.1 Plotting LISA map
+As seen from all the maps in Section 7.2, across the years, not all province exhibit statistically significant Local Moran's I value. I will filter them out since I want to focus on province that with statistically significant Local Moran's I value. I also created the LISA quadrants in order to plot the map.
+```{r}
+quadrant_list <- list()
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  
+  quadrant_list[[year]] <- vector(length = nrow(data_for_year))
+  yearly_data[[year]]$lag_total_cases <- st_lag(rswm_q_list[[year]]$total_cases, rswm_q_list[[year]]$nb, rswm_q_list[[year]]$wt)
+  DV <- yearly_data[[year]]$lag_total_cases - mean(yearly_data[[year]]$lag_total_cases)
+  LM_I <- local_moran_list[[year]][,1] 
+  signif <- 0.05
+  quadrant_list[[year]][DV<0 & LM_I>0] <- "LOW - LOW"
+  quadrant_list[[year]][DV>0 & LM_I<0] <- "LOW - HIGH"
+  quadrant_list[[year]][DV<0 & LM_I<0] <- "HIGH - LOW"
+  quadrant_list[[year]][DV>0 & LM_I>0] <- "HIGH - HIGH"
+  quadrant_list[[year]][local_moran_list[[year]][,5]>signif] <- "Insignificant"
+  
+  yearly_data[[year]]$quadrant <- quadrant_list[[year]]
+}
+```
+
+```{r}
+lisa_significant <- list()
+for (year in names(yearly_data)){
+  year_data <- lisa_list[[year]]
+  significant_data <- yearly_data[[year]] %>% filter(p_ii<0.05)
+  lisa_significant[[year]] <- significant_data
+}
+```
+
+```{r}
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+
+  map1 <- tm_shape(data_for_year) + 
+    tm_polygons() +
+    tm_borders(alpha=0.5)+
+    tm_shape(lisa_significant[[year]]) + 
+    tm_fill("quadrant")+
+    tm_borders(alpha=0.5)
+  
+  map2 <- tm_shape(data_for_year) + tm_polygons("total_cases", palette="Blues", style="quantile", n=10)
+
+  maps<-tmap_arrange(map1, map2, asp=1, ncol=2)
+  print(maps)
+}
+```
+From the graphs above, we can identify the province that has statistically significant spatial autocorrelation with its neighbouring provinces. 
+
+In 2017, although there are quite a number of province with high drug abuse cases (DARK BLUE) as seen from the right graph, the province with HIGH HIGH drug abuse clusters are only in the central bottom region. 
+
+2018 and 2019 has not much difference but we can see that the number of province with high drug abuse cases are increasing. In 2020, the south provinces in Thailand has an increase in drug abuse cases where the province are coloured dark blue.2 of the province with high drug abuse cases are also part of the HIGH HIGH drug abuse clusters. 
+
+In 2022, provinces in the north east of Thailand has extremely high number of drug abuse cases where they belong to the HIGH HIGH cluster. Many of them are coloured in dark blue. However, one region stood out where it is coloured light blue among the province coloured dark blue. This also explains the colouring in the LISA cluster map. The region that is coloured light blue belongs to a LOW HIGH cluster which means that the drug abuse cases in that province is low but is surrounded by neighbouring province with high drug abuse cases. 
+
+Another observation that we can make is the LOW LOW clusters. There aren't any from 2017-2020 and it only appeared in 2019. This could possibly mean that the police in these province may be working together to take actions on drug abuse criminals which led to a decrease in cases and hence, these provinces belong to a LOW LOW cluster.
+
+# 9.0 Hot spot and Cold Spot Area Analysis
+## 9.1 Getis and Ord's G statistics
+In this section, we will analyse and hot and cold spots. I first derived the centroid of each polygon. I use map_dbl() function and st_centroid() function to get the longitude and latitude values. After getting the objects, I use cbind to put them into the same object. Each year will have one object each.
+```{r}
+longitude_list <- list()
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  longitude_list[[year]] <- map_dbl(data_for_year$geometry, ~st_centroid(.x)[[1]])
+}
+```
+
+```{r}
+latitude_list <- list()
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  latitude_list[[year]] <- map_dbl(data_for_year$geometry, ~st_centroid(.x)[[2]])
+}
+```
+
+```{r}
+coords_list <- list()
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  coords_list[[year]] <- cbind(longitude_list[[year]], latitude_list[[year]])
+}
+```
+
+I then determine the upper limit for distance band.
+```{r}
+k1dists_list <- list()
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  k1dists_list[[year]] <- st_nb_dists(coords_list[[year]], rswm_q_list[[year]]$nb)
+  print(summary(unlist(k1dists_list[[year]])))
+}
+```
+As shown from the summary report above, the largest first nearest neighbour distance is 245486km. So I will be using this as the upper threshold which gives the certainty that all units all have at least one neighbour.
+
+Since I will be testing with fixed and adaptive distance weight matrix, I first get the distance neighbour and weights.
+```{r}
+wm_fd_nb_list <- list()
+wm_fd_wt_list <- list()
+wm_ad_nb_list <- list()
+wm_ad_wt_list <- list()
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  wm_fd.nb <- st_dist_band(coords_list[[year]], lower=0, upper=245486)
+  wm_fd_nb_list[[year]] <- wm_fd.nb
+  wm_fd_wt_list[[year]] <- st_inverse_distance(wm_fd.nb, data_for_year$geometry)
+  
+  wm_ad.nb <- st_knn(coords_list[[year]], k=8)
+  wm_ad_nb_list[[year]] <- wm_ad.nb
+  wm_ad_wt_list[[year]] <- st_inverse_distance(wm_ad.nb, data_for_year$geometry)
+  
+}
+```
+I plot the graphs side by side for each year in order to make comparison much easier.
+```{r}
+for (year in names(yearly_data)) {
+  data_for_year <- yearly_data[[year]]
+  wm_fd.nb <- wm_fd_nb_list[[year]]
+  wm_fd.wt <- wm_fd_wt_list[[year]]
+  wm_ad.nb <- wm_ad_nb_list[[year]]
+  wm_ad.wt <- wm_ad_wt_list[[year]]
+
+  hcsa <- data_for_year %>% cbind(local_gstar_perm(rswm_q_list[[year]]$total_cases, rswm_q_list[[year]]$nb, rswm_q_list[[year]]$wt, nsim=99)) %>% mutate("p_sim" = replace(`p_sim`, `p_sim` > 0.05, NA),
+         "gi_star" = ifelse(is.na(`p_sim`), NA, `gi_star`))
+
+  hcsa.fd <- data_for_year %>% 
+    cbind(local_gstar_perm(rswm_q_list[[year]]$total_cases, wm_fd.nb, wm_fd.wt, nsim=99)) %>%mutate("p_sim" = replace(`p_sim`, `p_sim` > 0.05, NA),
+           "gi_star" = ifelse(is.na(`p_sim`), NA, `gi_star`))
+  
+  hcsa.ad <- data_for_year %>% cbind(local_gstar_perm(rswm_q_list[[year]]$total_cases, wm_ad.nb, wm_ad.wt, nsim=99)) %>% mutate("p_sim" = replace(`p_sim`, `p_sim` > 0.05, NA),
+           "gi_star" = ifelse(is.na(`p_sim`), NA, `gi_star`))
+  
+  map1 <- tm_shape(hcsa.fd) + tm_fill("gi_star", title = paste("Gi* fixed ", year)) + tm_borders(alpha=0.5)
+  map2 <- tm_shape(hcsa.ad) + tm_fill("gi_star", title = paste("Gi* adaptive", year)) + tm_borders(alpha=0.5)
+  
+  maps <- tmap_arrange(map1, map2, asp = 1, ncol = 2)
+  print(maps)
+}
+```
+Most of the maps are quite similar in terms of highlighted areas but there are still a few province that were picked out under adaptive distances but not fixed distances. An example is for the year 2017, for the adaptive distances, it has identified the bottom central region to be a cold spot while the fixed distances did not identify it. Another example is in 2018, the central bottom provinces are still identified as a cold spot for adaptive distances but it was not coloured out in fixed distances. On the other hand, for the year 2022, a cold spot was identified in the fixed distances map in the east of Thailand while it was not identified as one in the adaptive distances. 
+
+# 10.0 Conclusion
+In conclusion, through the analysis performed, I have found out more about the provinces that formed clusters of drug abuse cases as well as those province who have low drug cases but are surrounded by provinces with high drug cases. I have also learnt more about the trend of drug abuse cases in Thailand across the year 2017-2022. It definitely has been a very interesting assignment. I feel that the results found in this analysis could be very beneficial for the Thailand government as they will be able to find out which parts of Thailand have high drug abuse cases and can potentially pull in more resources to stop the drug abuse cases from growing and prevent large province clusters with high drug cases from increasing. 

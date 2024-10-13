@@ -25,6 +25,7 @@ hunan_2012 <- read_csv("data/aspatial/Hunan_2012.csv")
 ```{r}
 hunan_GDPPC <- left_join(hunan, hunan_2012) %>% select(1:4, 7, 15)
 ```
+
 # 3.0 Global measures of Spatial Association
 ## 3.1 Deriving Queen's contiguity weights
 ```{r}
