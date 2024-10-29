@@ -1,0 +1,328 @@
+---
+title: "Take Home Ex 3"
+author: "Nathania Yeo"
+date: "October 27, 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true
+  freeze: true
+---
+
+# 1.0 Overview
+
+In this exercise, my focus would be on 1st order Spatial Point Analysis, particularly finding out the density and distribution trends of eldercare facilities.
+
+# 2.0 R packages
+
+I will load the following R packages for the following purposes:
+
+1.  [**sf**](https://r-spatial.github.io/sf/): to import, manage and process vector-based geospatial data in R.
+
+2.  [**spatstat**](https://spatstat.org/): to perform 1st- and 2nd-order spatial point patterns analysis and derive kernel density estimation (KDE) layer.
+
+3.  [**raster**](https://cran.r-project.org/web/packages/raster/): used to convert image output generate by spatstat into raster format.
+
+4.  [**maptools**](https://cran.r-project.org/web/packages/maptools/index.html): use it to convert *Spatial* objects into *ppp* format of **spatstat**.
+
+5.  [**tmap**](https://cran.r-project.org/web/packages/tmap/index.html) which provides functions for plotting cartographic quality static point patterns maps or interactive maps by using [leaflet](https://leafletjs.com/) API.
+
+```{r}
+pacman::p_load(sf, spatstat, raster, maptools, tmap)
+```
+
+# 3.0 Data Preparation
+
+The data that I will be using includes:
+
+1.  URA 2014 Master Plan Planning Subzone boundary data. This data is in shapefile format which is downloaded from Data.gov.sg
+
+2.  Eldercare Services. This data provides both the location and information of eldercare services in Singapore. It was downloaded from Data.gov.sg and is in geojson format.
+
+```{r}
+eldercare <- st_read("data/EldercareServices.geojson") %>% st_transform(crs = 3414)
+mpsz_sf <- st_read(dsn="data",layer="MP14_SUBZONE_WEB_PL")
+sg_sf <- st_read(dsn = "data", layer="CostalOutline")
+```
+
+Since mpsz_sf does not have the proper crs information, the code chunk below updates the crs information.
+
+```{r}
+mpsz_sf <- st_transform(mpsz_sf, crs=3414)
+sg_sf <- st_transform(sg_sf, crs=3414)
+```
+
+# 4.0 Mapping the datasets
+
+```{r}
+tm_shape(sg_sf) + tm_polygons() + tm_shape(mpsz_sf) + tm_polygons() + tm_shape(eldercare) + tm_dots()
+```
+
+# 5.0 Geospatial Data Wrangling
+
+## 5.1 Convert sf data frames to sp Spatial classes
+
+```{r}
+mpsz <- as_Spatial(mpsz_sf)
+ec <- as_Spatial(eldercare)
+sg <- as_Spatial(sg_sf)
+
+mpsz
+ec
+sg
+```
+
+## 5.2 Convert the Spatial class into generic sp format
+
+```{r}
+ec_sp <- as(ec, "SpatialPoints")
+sg_sp <- as(sg, "SpatialPolygons")
+ec_sp
+sg_sp
+```
+
+## 5.3 Convert generic sp format inso spatstat ppp format
+
+```{r}
+ec_ppp <- as.ppp(eldercare)
+ec_ppp
+```
+
+```{r}
+summary(ec_ppp)
+```
+
+## 5.4 Check for duplicate values
+
+Although the summary does not say that there are duplicate values, we will just do a check to make sure that we did not miss out anything.
+
+```{r}
+any(duplicated(ec_ppp))
+```
+
+## 5.5 Creating owin object
+
+```{r}
+sg_owin <- as.owin(sg_sf)
+plot(sg_owin)
+```
+
+## 5.6 Combining point events objects and owin object
+
+```{r}
+eldercareSG_ppp = ec_ppp[sg_owin]
+plot(eldercareSG_ppp)
+```
+
+# 6.0 1st Order Spatial Point Pattern Analysis
+
+## 6.1 Kernel Density Estimation (KDE)
+
+I would like to compute the KDE of eldercare services in Singapore.
+
+```{r}
+kde_eldercareSG_bw <- density(eldercareSG_ppp, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
+
+plot(kde_eldercareSG_bw)
+```
+
+## 6.2 Rescalling KDE values
+
+```{r}
+eldercareSG_ppp.km <- rescale.ppp(eldercareSG_ppp, 1000, "km")
+kde_eldercareSG.bw <- density(eldercareSG_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
+plot(kde_eldercareSG.bw)
+```
+
+# 7.0 Comparing Spatial Point Patterns using KDE
+
+## 7.1 Extracting study area
+
+I will focus on certain planning areas in Singapore
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+toapayoh <- mpsz_sf %>%
+  filter(PLN_AREA_N == "TOA PAYOH")
+bukitmerah <- mpsz_sf %>%
+  filter(PLN_AREA_N == "BUKIT MERAH")
+bishan <- mpsz_sf %>%
+  filter(PLN_AREA_N == "BISHAN")
+amk <- mpsz_sf %>%
+  filter(PLN_AREA_N == "ANG MO KIO")
+juronge <- mpsz_sf %>%
+  filter(PLN_AREA_N == "JURONG EAST")
+woodlands <- mpsz_sf %>%
+  filter(PLN_AREA_N == "WOODLANDS")
+changi <- mpsz_sf %>%
+  filter(PLN_AREA_N == "CHANGI")
+pasirris <- mpsz_sf %>%
+  filter(PLN_AREA_N == "PASIR RIS")
+bedok <- mpsz_sf %>%
+  filter(PLN_AREA_N == "BEDOK")
+tm <- mpsz_sf %>%
+  filter(PLN_AREA_N == "TAMPINES")
+punggol <- mpsz_sf %>%
+  filter(PLN_AREA_N == "CHOA CHU KANG")
+yishun <- mpsz_sf %>%
+  filter(PLN_AREA_N == "YISHUN")
+sembawang <- mpsz_sf %>%
+  filter(PLN_AREA_N == "SEMBAWANG")
+bukitbatok <- mpsz_sf %>%
+  filter(PLN_AREA_N == "BUKIT BATOK")
+jurongw <- mpsz_sf %>%
+  filter(PLN_AREA_N == "JURONG WEST")
+```
+
+## 7.2 Creating owin object
+
+```{r}
+tp_owin = as.owin(toapayoh)
+bs_owin = as.owin(bishan)
+amk_owin = as.owin(amk)
+je_owin = as.owin(juronge)
+wdlds_owin = as.owin(woodlands)
+changi_owin = as.owin(changi)
+pr_owin = as.owin(pasirris)
+bedok_owin = as.owin(bedok)
+tm_owin = as.owin(tm)
+pg_owin = as.owin(punggol)
+ys_owin = as.owin(yishun)
+sbw_owin = as.owin(sembawang)
+bb_owin = as.owin(bukitbatok)
+jw_owin = as.owin(jurongw)
+```
+
+## 7.3 Combining eldercare points and study area
+
+```{r}
+ec_tp_ppp = ec_ppp[tp_owin]
+ec_bs_ppp = ec_ppp[bs_owin]
+ec_amk_ppp = ec_ppp[amk_owin]
+ec_je_ppp = ec_ppp[je_owin]
+ec_wdlds_ppp = ec_ppp[wdlds_owin]
+ec_changi_ppp = ec_ppp[changi_owin]
+ec_pr_ppp = ec_ppp[pr_owin]
+ec_bedok_ppp = ec_ppp[bedok_owin]
+ec_tm_ppp = ec_ppp[tm_owin]
+ec_pg_ppp = ec_ppp[pg_owin]
+ec_ys_ppp = ec_ppp[ys_owin]
+ec_sbw_ppp = ec_ppp[sbw_owin]
+ec_bb_ppp = ec_ppp[bb_owin]
+ec_jw_ppp = ec_ppp[jw_owin]
+```
+
+## 7.4 Rescalling
+
+```{r}
+ec_tp_ppp.km = rescale.ppp(ec_tp_ppp, 1000, "km")
+ec_bs_ppp.km = rescale.ppp(ec_bs_ppp, 1000, "km")
+ec_amk_ppp.km = rescale.ppp(ec_amk_ppp, 1000, "km")
+ec_je_ppp.km = rescale.ppp(ec_je_ppp, 1000, "km")
+ec_wdlds_ppp.km = rescale.ppp(ec_wdlds_ppp, 1000, "km")
+ec_changi_ppp.km = rescale.ppp(ec_changi_ppp, 1000, "km")
+ec_pr_ppp.km = rescale.ppp(ec_pr_ppp, 1000, "km")
+ec_bedok_ppp.km = rescale.ppp(ec_bedok_ppp, 1000, "km")
+ec_tm_ppp.km = rescale.ppp(ec_tm_ppp, 1000, "km")
+ec_pg_ppp.km = rescale.ppp(ec_pg_ppp, 1000, "km")
+ec_ys_ppp.km = rescale.ppp(ec_ys_ppp, 1000, "km")
+ec_sbw_ppp.km = rescale.ppp(ec_sbw_ppp, 1000, "km")
+ec_bb_ppp.km = rescale.ppp(ec_bb_ppp, 1000, "km")
+ec_jw_ppp.km = rescale.ppp(ec_jw_ppp, 1000, "km")
+```
+
+```{r}
+summary(ec_changi_ppp.km)
+```
+
+## 7.5 Computing KDE
+
+```{r}
+# par(mfrow=c(2,2))
+plot(density(ec_tp_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Toa Payoh")
+
+plot(density(ec_bs_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Bishan")
+
+plot(density(ec_amk_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Ang Mo Kio")
+
+plot(density(ec_je_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Jurong East")
+
+plot(density(ec_wdlds_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Woodlands")
+# 
+# plot(density(ec_changi_ppp.km, 
+#              sigma=bw.diggle, 
+#              edge=TRUE, 
+#              kernel="gaussian"),
+#      main="Changi")
+
+# plot(density(ec_pr_ppp.km, 
+#              sigma=bw.diggle, 
+#              edge=TRUE, 
+#              kernel="gaussian"),
+#      main="Pasir Ris")
+
+plot(density(ec_bedok_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Bedok")
+
+plot(density(ec_tm_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Tampines")
+
+plot(density(ec_pg_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Punggol")
+
+plot(density(ec_ys_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Yishun")
+
+# plot(density(ec_sbw_ppp.km, 
+#              sigma=bw.diggle, 
+#              edge=TRUE, 
+#              kernel="gaussian"),
+#      main="Sembawang")
+
+plot(density(ec_bb_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Bukit Batok")
+
+plot(density(ec_jw_ppp.km, 
+             sigma=bw.diggle, 
+             edge=TRUE, 
+             kernel="gaussian"),
+     main="Jurong West")
+```

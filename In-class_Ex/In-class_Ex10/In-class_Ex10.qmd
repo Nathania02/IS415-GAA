@@ -1,0 +1,139 @@
+---
+title: "In-class Ex 10"
+author: "Nathania Yeo"
+date: "October 27, 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true
+  freeze: true
+---
+
+```{r}
+pacman::p_load(olsrr, ggstatsplot, sf, tmap, tidyverse, gtsummary, performance, see, sfdep)
+```
+
+```{r}
+condo_resale <- read_csv("data/aspatial/Condo_resale_2015.csv")
+mpsz = st_read(dsn = "data/geospatial", layer = "MP14_SUBZONE_WEB_PL")
+```
+
+```{r}
+mpsz_svy21 <- st_transform(mpsz, 3414)
+```
+
+```{r}
+condo_resale.sf <- st_as_sf(condo_resale, coords = c("LONGITUDE", "LATITUDE"), crs=4326) %>% st_transform(crs = 3414)
+```
+
+Building a Hedonic Pricing Model by using Multiple Linear Regression Method
+
+```{r}
+condo_mlr <- lm(formula = SELLING_PRICE ~ AREA_SQM + AGE    + 
+                  PROX_CBD + PROX_CHILDCARE + PROX_ELDERLYCARE +
+                  PROX_URA_GROWTH_AREA + PROX_HAWKER_MARKET + PROX_KINDERGARTEN + 
+                  PROX_MRT  + PROX_PARK + PROX_PRIMARY_SCH + 
+                  PROX_TOP_PRIMARY_SCH + PROX_SHOPPING_MALL + PROX_SUPERMARKET + 
+                  PROX_BUS_STOP + NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD, 
+                data=condo_resale.sf)
+summary(condo_mlr)
+```
+
+```{r}
+ols_condo <- ols_regress(condo_mlr)
+```
+
+Variable selection
+
+Stepwise regression is the step-by-step iterative construction of a regression model that invovles the selection of independent variables to be used in the model.
+
+-   ols_step_forward_p
+
+-   ols_step_backward_p
+
+-   ols_step_both_p
+
+```{r}
+condo_fw_mlr <- ols_step_forward_p(condo_mlr, p_val=0.05, details=FALSE)
+condo_fw_mlr
+```
+
+```{r}
+plot(condo_fw_mlr)
+```
+
+```{r}
+condo_bw_mlr <- ols_step_backward_p(condo_mlr, p_val=0.05, details=FALSE)
+condo_bw_mlr
+```
+
+```{r}
+plot(condo_bw_mlr)
+```
+
+```{r}
+condo_both_mlr <- ols_step_both_p(condo_mlr, p_val=0.05, details=FALSE)
+condo_both_mlr
+```
+
+```{r}
+plot(condo_both_mlr)
+```
+
+Model Selection
+
+```{r}
+metric <- compare_performance(condo_mlr, condo_fw_mlr$model, condo_bw_mlr$model, condo_both_mlr$model)
+```
+
+```{r}
+metric$Name <- gsub(".*\\\\([a-zA-Z0-9_]+)\\\\, \\\\model\\\\.*", "\\1", metric$Name)
+```
+
+```{r}
+plot(metric)
+```
+
+```{r}
+ggcoefstats(condo_both_mlr$model, sort = "ascending")
+```
+
+Check for multicollinearity
+
+```{r}
+check_collinearity(condo_both_mlr$model)
+```
+
+```{r}
+plot(check_collinearity(condo_both_mlr$model)) + theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+Linearity Assumption Test
+
+```{r}
+out <- plot(check_model(condo_both_mlr$model, panel=FALSE))
+out[[2]]
+```
+
+Normality assumption test
+
+```{r}
+plot(check_normality(condo_both_mlr$model))
+```
+
+Checking for outliers
+
+```{r}
+outliers <- check_outliers(condo_both_mlr$model, method = "cook")
+outliers
+```
+
+```{r}
+plot(check_outliers(condo_both_mlr$model, method="cook"))
+```
+
+Visualising spatial non-stationary
+
+```{r}
+mlr_output <- as.data.frame(condo_fw_mlr$model$residuals) %>% rename(`FW_MLR_RES` = `condo_fw_mlr$model$residuals`)
+```
