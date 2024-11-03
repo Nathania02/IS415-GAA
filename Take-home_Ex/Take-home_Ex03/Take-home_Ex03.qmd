@@ -9,11 +9,13 @@ execute:
   freeze: true
 ---
 
-# 1.0 Overview
+# Overview
 
-In this exercise, my focus would be on 1st order Spatial Point Analysis, particularly finding out the density and distribution trends of eldercare facilities.
+In this exercise, my focus would be on 1st order Spatial Point Analysis - KDE. KDE plots are a powerful visualisation tool to help identify and analyse the spatial patterns of eldercare facility distribution across the region of interest. In our project, the region of interest consist of the 5 regions in Singapore as well as the different planning areas. 
 
-# 2.0 R packages
+This analysis will help in data-driven insights, which could possible help stakeholders plan more effective service delivery and accessibility enhancements based on the current distribution of eldercare services.
+
+# R packages
 
 I will load the following R packages for the following purposes:
 
@@ -31,13 +33,15 @@ I will load the following R packages for the following purposes:
 pacman::p_load(sf, spatstat, raster, maptools, tmap)
 ```
 
-# 3.0 Data Preparation
+# Data Preparation
 
 The data that I will be using includes:
 
 1.  URA 2014 Master Plan Planning Subzone boundary data. This data is in shapefile format which is downloaded from Data.gov.sg
 
 2.  Eldercare Services. This data provides both the location and information of eldercare services in Singapore. It was downloaded from Data.gov.sg and is in geojson format.
+
+3.  Coastal Ouline. It is provided by SLA and is in shapefile format.
 
 ```{r}
 eldercare <- st_read("data/EldercareServices.geojson") %>% st_transform(crs = 3414)
@@ -52,36 +56,24 @@ mpsz_sf <- st_transform(mpsz_sf, crs=3414)
 sg_sf <- st_transform(sg_sf, crs=3414)
 ```
 
-# 4.0 Mapping the datasets
+# Geospatial Data Wrangling
 
-```{r}
-tm_shape(sg_sf) + tm_polygons() + tm_shape(mpsz_sf) + tm_polygons() + tm_shape(eldercare) + tm_dots()
-```
-
-# 5.0 Geospatial Data Wrangling
-
-## 5.1 Convert sf data frames to sp Spatial classes
+## Convert sf data frames to sp Spatial classes
 
 ```{r}
 mpsz <- as_Spatial(mpsz_sf)
 ec <- as_Spatial(eldercare)
 sg <- as_Spatial(sg_sf)
-
-mpsz
-ec
-sg
 ```
 
-## 5.2 Convert the Spatial class into generic sp format
+## Convert the Spatial class into generic sp format
 
 ```{r}
 ec_sp <- as(ec, "SpatialPoints")
 sg_sp <- as(sg, "SpatialPolygons")
-ec_sp
-sg_sp
 ```
 
-## 5.3 Convert generic sp format inso spatstat ppp format
+## Convert generic sp format inso spatstat ppp format
 
 ```{r}
 ec_ppp <- as.ppp(eldercare)
@@ -92,7 +84,7 @@ ec_ppp
 summary(ec_ppp)
 ```
 
-## 5.4 Check for duplicate values
+## Check for duplicate values
 
 Although the summary does not say that there are duplicate values, we will just do a check to make sure that we did not miss out anything.
 
@@ -100,50 +92,197 @@ Although the summary does not say that there are duplicate values, we will just 
 any(duplicated(ec_ppp))
 ```
 
-## 5.5 Creating owin object
+## Creating owin object
 
 ```{r}
 sg_owin <- as.owin(sg_sf)
-plot(sg_owin)
 ```
 
-## 5.6 Combining point events objects and owin object
+## Combining point events objects and owin object
 
 ```{r}
 eldercareSG_ppp = ec_ppp[sg_owin]
-plot(eldercareSG_ppp)
 ```
-
-# 6.0 1st Order Spatial Point Pattern Analysis
-
-## 6.1 Kernel Density Estimation (KDE)
-
-I would like to compute the KDE of eldercare services in Singapore.
 
 ```{r}
-kde_eldercareSG_bw <- density(eldercareSG_ppp, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
-
-plot(kde_eldercareSG_bw)
+eldercare_ppp.km = rescale.ppp(eldercareSG_ppp, 1000, "km")
 ```
 
-## 6.2 Rescalling KDE values
+# 1st Order Spatial Point Pattern Analysis 
 
+## Level 1: General 
+
+### Computing KDE - Automatic bandwidth
+This section is creating the KDE plots based on the type of automatic bandwidth selected. 
 ```{r}
-eldercareSG_ppp.km <- rescale.ppp(eldercareSG_ppp, 1000, "km")
-kde_eldercareSG.bw <- density(eldercareSG_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
-plot(kde_eldercareSG.bw)
+kde_eldercare_diggle <- density(eldercare_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
+kde_eldercare_ppl <- density(eldercare_ppp.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
+kde_eldercare_cvl <- density(eldercare_ppp.km, sigma=bw.CvL, edge=TRUE, kernel="gaussian")
+kde_eldercare_scott <- density(eldercare_ppp.km, sigma=bw.scott, edge=TRUE, kernel="gaussian")
+
+plot(kde_eldercare_diggle)
+plot(kde_eldercare_ppl)
+plot(kde_eldercare_cvl)
+plot(kde_eldercare_scott)
+```
+#### Shiny App (Storyboard)
+![This is the caption!](img/overall_automatic.png)
+
+### Computing KDE - Type of kernel methods
+This section is creating the KDE plots based on the kernel methods. Below is are 4 samples of variations based on the parameters that the user has selected. In the project, users can select any variations that they want.
+```{r}
+kde_eldercare_quartic <- density(eldercare_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="quartic")
+kde_eldercare_ep <- density(eldercare_ppp.km, sigma=bw.ppl, edge=TRUE, kernel="epanechnikov")
+kde_eldercare_gaussian <- density(eldercare_ppp.km, sigma=bw.CvL, edge=TRUE, kernel="gaussian")
+kde_eldercare_disc <- density(eldercare_ppp.km,sigma=bw.scott, edge=TRUE, kernel="disc")
+
+plot(kde_eldercare_quartic)
+plot(kde_eldercare_ep)
+plot(kde_eldercare_gaussian)
+plot(kde_eldercare_disc)
+```
+#### Shiny App (Storyboard)
+![This is the caption!](img/overall_kernel.png)
+
+### Computing KDE - Fixed bandwidth
+Below are some variations of KDE plots based on the bandwidth stated together with different kernel.
+```{r}
+kde_eldercare_sigma6 <- density(eldercare_ppp.km, sigma=0.6, edge=TRUE, kernel="gaussian")
+kde_eldercare_sigma9 <- density(eldercare_ppp.km, sigma=0.9, edge=TRUE, kernel="disc")
+kde_eldercare_sigma5 <- density(eldercare_ppp.km, sigma=0.5, edge=TRUE, kernel="quartic")
+kde_eldercare_sigma4 <- density(eldercare_ppp.km, sigma=0.4, edge=TRUE, kernel="epanechnikov")
+
+plot(kde_eldercare_sigma6)
+plot(kde_eldercare_sigma9)
+plot(kde_eldercare_sigma5)
+plot(kde_eldercare_sigma4)
+
+```
+#### Shiny App (Storyboard)
+![This is the caption!](img/overall_fixed.png)
+
+### Computing KDE - Adaptive bandwidth
+```{r}
+kde_eldercare_adaptive <- adaptive.density(eldercare_ppp.km, method="kernel")
+plot(kde_eldercare_adaptive)
 ```
 
-# 7.0 Comparing Spatial Point Patterns using KDE
+#### Shiny App (Storyboard)
+![This is the caption!](img/overall_adaptive.png)
 
-## 7.1 Extracting study area
-
-I will focus on certain planning areas in Singapore
+## Level 2: Region
+There are 5 regions in Singapore - Central, North, East, South, West and North-East. For the KDE plots, it will be based on a scenario where the user want to find out more about the eldercare services distribution in the Central region of Singapore.
 
 ```{r}
 library(dplyr)
 ```
 
+### Extracting study area
+```{r}
+central <- mpsz_sf %>%
+  filter(REGION_N == "CENTRAL REGION")
+north <- mpsz_sf %>%
+  filter(REGION_N == "NORTH REGION")
+east <- mpsz_sf %>%
+  filter(REGION_N == "EAST REGION")
+west <- mpsz_sf %>%
+  filter(REGION_N == "WEST REGION")
+northe <- mpsz_sf %>%
+  filter(REGION_N == "NORTH-EAST REGION")
+```
+
+### Creating owin object
+```{r}
+central_owin = as.owin(central)
+north_owin = as.owin(north)
+east_owin = as.owin(east)
+west_owin = as.owin(west)
+northe_owin = as.owin(northe)
+```
+
+### Combining eldercare points and study area
+```{r}
+central_ppp = ec_ppp[central_owin]
+north_ppp = ec_ppp[north_owin]
+east_ppp = ec_ppp[east_owin]
+west_ppp = ec_ppp[west_owin]
+northe_ppp = ec_ppp[northe_owin]
+```
+
+### Rescaling to kilometres
+```{r}
+central_ppp.km = rescale.ppp(central_ppp, 1000, "km")
+```
+
+### Computing KDE - Automatic Bandwidth
+```{r}
+central_diggle <- density(central_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
+central_ppl <- density(central_ppp.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
+central_cvl <- density(central_ppp.km, sigma=bw.CvL, edge=TRUE, kernel="gaussian")
+central_scott <- density(central_ppp.km, sigma=bw.scott, edge=TRUE, kernel="gaussian")
+
+plot(central_diggle)
+plot(central_ppl)
+plot(central_cvl)
+plot(central_scott)
+```
+
+#### Shiny App (Storyboard)
+![This is the caption!](img/central_automatic.png)
+
+### Computing KDE - Type of Kernel methods
+
+```{r}
+central_gaussian <- density(central_ppp.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
+central_quartic <- density(central_ppp.km, sigma=bw.scott, edge=TRUE, kernel="quartic")
+central_ep <- density(central_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="epanechnikov")
+central_disc <- density(central_ppp.km, sigma=bw.CvL, edge=TRUE, kernel="disc")
+
+plot(central_gaussian)
+plot(central_quartic)
+plot(central_ep)
+plot(central_disc)
+```
+
+#### Shiny App (Storyboard)
+![This is the caption!](img/central_kernel.png)
+
+
+
+### Computing KDE - Fixed bandwidth
+Below are some variations of KDE plots based on the bandwidth stated together with different kernel.
+```{r}
+kde_central_eldercare2 <- density(central_ppp.km, sigma=0.2, edge=TRUE, kernel="gaussian")
+kde_central_eldercare8 <- density(central_ppp.km, sigma=0.8, edge=TRUE, kernel="disc")
+kde_central_eldercare7 <- density(central_ppp.km, sigma=0.7, edge=TRUE, kernel="quartic")
+kde_central_eldercare3 <- density(central_ppp.km, sigma=0.3, edge=TRUE, kernel="epanechnikov")
+
+plot(kde_central_eldercare2)
+plot(kde_central_eldercare8)
+plot(kde_central_eldercare7)
+plot(kde_central_eldercare3)
+
+```
+
+#### Shiny App (Storyboard)
+![This is the caption!](img/central_fixed.png)
+
+
+
+### Computing KDE - Adaptive Bandwidth
+```{r}
+kde_central_eldercare_adaptive <- adaptive.density(central_ppp.km, method="kernel")
+plot(kde_central_eldercare_adaptive)
+```
+
+#### Shiny App (Storyboard)
+![This is the caption!](img/central_adaptive.png)
+
+## Level 3: Planning Area
+The below scenario is whereby a user is interested in looking at the distribution of eldercare services in a particular Planning Area such as PUNGGOL.
+
+### Extracting study area
+The code chunk below will be used to extract the different planning areas. There are only a 15 areas extracted but in the project, more of the planning areas will be extracted.
 ```{r}
 toapayoh <- mpsz_sf %>%
   filter(PLN_AREA_N == "TOA PAYOH")
@@ -166,7 +305,7 @@ bedok <- mpsz_sf %>%
 tm <- mpsz_sf %>%
   filter(PLN_AREA_N == "TAMPINES")
 punggol <- mpsz_sf %>%
-  filter(PLN_AREA_N == "CHOA CHU KANG")
+  filter(PLN_AREA_N == "PUNGGOL")
 yishun <- mpsz_sf %>%
   filter(PLN_AREA_N == "YISHUN")
 sembawang <- mpsz_sf %>%
@@ -177,7 +316,7 @@ jurongw <- mpsz_sf %>%
   filter(PLN_AREA_N == "JURONG WEST")
 ```
 
-## 7.2 Creating owin object
+### Creating owin object
 
 ```{r}
 tp_owin = as.owin(toapayoh)
@@ -196,7 +335,7 @@ bb_owin = as.owin(bukitbatok)
 jw_owin = as.owin(jurongw)
 ```
 
-## 7.3 Combining eldercare points and study area
+### Combining eldercare points and study area
 
 ```{r}
 ec_tp_ppp = ec_ppp[tp_owin]
@@ -215,7 +354,7 @@ ec_bb_ppp = ec_ppp[bb_owin]
 ec_jw_ppp = ec_ppp[jw_owin]
 ```
 
-## 7.4 Rescalling
+### Rescalling to kilometres
 
 ```{r}
 ec_tp_ppp.km = rescale.ppp(ec_tp_ppp, 1000, "km")
@@ -234,95 +373,89 @@ ec_bb_ppp.km = rescale.ppp(ec_bb_ppp, 1000, "km")
 ec_jw_ppp.km = rescale.ppp(ec_jw_ppp, 1000, "km")
 ```
 
+I want to make sure that all the planning areas have points data so that it can be used in the kernel density estimation in the next steps. While doing so, I realised that areas such as Changi and Pasir ris do not have any point data. Therefore, these areas will not be an option in the storyboard in the project.
 ```{r}
 summary(ec_changi_ppp.km)
 ```
 
-## 7.5 Computing KDE
-
 ```{r}
-# par(mfrow=c(2,2))
-plot(density(ec_tp_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Toa Payoh")
-
-plot(density(ec_bs_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Bishan")
-
-plot(density(ec_amk_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Ang Mo Kio")
-
-plot(density(ec_je_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Jurong East")
-
-plot(density(ec_wdlds_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Woodlands")
-# 
-# plot(density(ec_changi_ppp.km, 
-#              sigma=bw.diggle, 
-#              edge=TRUE, 
-#              kernel="gaussian"),
-#      main="Changi")
-
-# plot(density(ec_pr_ppp.km, 
-#              sigma=bw.diggle, 
-#              edge=TRUE, 
-#              kernel="gaussian"),
-#      main="Pasir Ris")
-
-plot(density(ec_bedok_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Bedok")
-
-plot(density(ec_tm_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Tampines")
-
-plot(density(ec_pg_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Punggol")
-
-plot(density(ec_ys_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Yishun")
-
-# plot(density(ec_sbw_ppp.km, 
-#              sigma=bw.diggle, 
-#              edge=TRUE, 
-#              kernel="gaussian"),
-#      main="Sembawang")
-
-plot(density(ec_bb_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Bukit Batok")
-
-plot(density(ec_jw_ppp.km, 
-             sigma=bw.diggle, 
-             edge=TRUE, 
-             kernel="gaussian"),
-     main="Jurong West")
+summary(ec_pr_ppp.km)
 ```
+
+### Computing KDE - Automatic bandwidth
+This section is creating the KDE plots based on the type of automatic bandwidth selected. 
+```{r}
+pg_diggle <- density(ec_pg_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
+pg_ppl <- density(ec_pg_ppp.km, sigma=bw.ppl, edge=TRUE, kernel="gaussian")
+pg_cvl <- density(ec_pg_ppp.km, sigma=bw.CvL, edge=TRUE, kernel="gaussian")
+pg_scott <- density(ec_pg_ppp.km, sigma=bw.scott, edge=TRUE, kernel="gaussian")
+
+plot(pg_diggle)
+plot(pg_ppl)
+plot(pg_cvl)
+plot(pg_scott)
+```
+
+#### Shiny App (Storyboard)
+![This is the caption!](img/pg_automatic.png)
+
+### Computing KDE - Type of kernel methods
+This section is creating the KDE plots based on the kernel methods. Below is are 4 samples of variations based on the parameters that the user has selected. 
+```{r}
+pg_quartic <- density(ec_pg_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="quartic")
+pg_ep <- density(ec_pg_ppp.km, sigma=bw.ppl, edge=TRUE, kernel="epanechnikov")
+pg_gaussian <- density(ec_pg_ppp.km, sigma=bw.CvL, edge=TRUE, kernel="gaussian")
+pg_disc <- density(ec_pg_ppp.km,sigma=bw.scott, edge=TRUE, kernel="disc")
+
+plot(pg_quartic)
+plot(pg_ep)
+plot(pg_gaussian)
+plot(pg_disc)
+```
+
+#### Shiny App (Storyboard)
+![This is the caption!](img/pg_kernel.png)
+
+### Computing KDE - Fixed bandwidth
+Below are some variations of KDE plots based on the bandwidth stated together with different kernel.
+```{r}
+kde_eldercare6 <- density(ec_pg_ppp.km, sigma=0.6, edge=TRUE, kernel="gaussian")
+kde_eldercare9 <- density(ec_pg_ppp.km, sigma=0.9, edge=TRUE, kernel="disc")
+kde_eldercare5 <- density(ec_pg_ppp.km, sigma=0.5, edge=TRUE, kernel="quartic")
+kde_eldercare4 <- density(ec_pg_ppp.km, sigma=0.4, edge=TRUE, kernel="epanechnikov")
+
+plot(kde_eldercare6)
+plot(kde_eldercare9)
+plot(kde_eldercare5)
+plot(kde_eldercare4)
+```
+
+#### Shiny App (Storyboard)
+![This is the caption!](img/pg_fixed.png)
+
+### Computing KDE - Adaptive bandwidth
+```{r}
+kde_eldercare_adaptive <- adaptive.density(ec_pg_ppp.km, method="kernel")
+plot(kde_eldercare_adaptive)
+```
+
+#### Shiny App (Storyboard)
+![This is the caption!](img/pg_adaptive.png)
+
+# Shiny App (Storyboard) Calibration Parameters
+```{r}
+# Load required packages
+library(knitr)
+library(kableExtra)
+
+# Create a data frame
+data <- data.frame(
+  Parameter = c("Spatial Unit", "Places of Interest", "Area of Interest", "Automatic Bandwidth Methods","Bandwidth","Sigma", "Method"),
+  Filter_Options = c("Overall, Region, Planning Area", "Eldercare services", "Depends on the Spatial Unit selected - Either the list of regions or the list of planning areas available e.g. Bedok, Punggol etc.","bw.diggle, bw.ppl, bw.CvL, bw.scott", "Fixed, Adaptive","Users can select a value from 0-1.0","Kernel")
+)
+
+# Generate the table
+kable(data, align = 'l', col.names = c("Parameter", "Filter Options")) %>%
+  kable_styling(full_width = FALSE)
+```
+
